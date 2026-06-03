@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Base de Operaciones · @victorapolo</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --bg:#0a0a0b; --bg2:#121214; --card:#161618; --line:#242428;
+    --txt:#ededed; --mut:#7a7a82; --mut2:#4a4a52;
+    --acc:#e8ff39; --acc2:#ffd400;
+    --blue:#38bdf8; --green:#4ade80; --orange:#f59e0b; --red:#f87171; --pink:#f472b6; --purp:#a78bfa;
+    --radius:14px;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--bg);color:var(--txt);font-family:'Helvetica Neue',Helvetica,Arial,system-ui,sans-serif;min-height:100vh;display:flex}
+  ::-webkit-scrollbar{width:9px;height:9px}::-webkit-scrollbar-thumb{background:#2a2a30;border-radius:8px}
+
+  /* SIDEBAR */
+  .sidebar{width:230px;background:var(--bg2);border-right:1px solid var(--line);height:100vh;position:sticky;top:0;display:flex;flex-direction:column;padding:22px 14px;flex-shrink:0}
+  .brand{font-weight:900;font-size:1.15rem;letter-spacing:-.5px;padding:0 10px 4px;line-height:1.1}
+  .brand b{color:var(--acc)}
+  .brand small{display:block;color:var(--mut);font-size:.66rem;font-weight:400;letter-spacing:.5px;margin-top:4px;text-transform:uppercase}
+  .nav{margin-top:26px;display:flex;flex-direction:column;gap:3px;flex:1}
+  .nav button{display:flex;align-items:center;gap:11px;background:none;border:none;color:var(--mut);font-size:.88rem;text-align:left;padding:10px 12px;border-radius:10px;cursor:pointer;transition:.15s;font-family:inherit;width:100%}
+  .nav button:hover{background:#1c1c20;color:var(--txt)}
+  .nav button.active{background:#1e1e10;color:var(--acc);font-weight:600}
+  .nav .ico{font-size:1.05rem;width:20px;text-align:center;flex-shrink:0}
+  .nav .count{margin-left:auto;font-size:.68rem;background:#26262c;color:var(--mut);padding:1px 7px;border-radius:10px}
+  .nav button.active .count{background:#2e2e16;color:var(--acc)}
+  .side-foot{border-top:1px solid var(--line);padding-top:12px;margin-top:8px}
+  .sync-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-left:auto}
+  .sync-cloud{background:var(--green);box-shadow:0 0 7px var(--green)}
+  .sync-local{background:var(--orange);box-shadow:0 0 7px var(--orange)}
+
+  /* MAIN */
+  .main{flex:1;min-width:0;padding:30px 34px 80px;max-width:1320px}
+  .pagehead{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:22px;flex-wrap:wrap}
+  .pagehead h1{font-size:1.7rem;font-weight:900;letter-spacing:-.6px}
+  .pagehead p{color:var(--mut);font-size:.84rem;margin-top:4px}
+  .btn{background:var(--acc);color:#0a0a0b;border:none;font-weight:700;font-size:.84rem;padding:10px 16px;border-radius:10px;cursor:pointer;font-family:inherit;transition:.15s;white-space:nowrap}
+  .btn:hover{background:#f1ff6b}
+  .btn.ghost{background:transparent;border:1px solid var(--line);color:var(--mut);font-weight:500}
+  .btn.ghost:hover{border-color:#444;color:var(--txt)}
+  .btn.sm{padding:6px 11px;font-size:.76rem}
+
+  .chip{background:#161618;border:1px solid var(--line);border-radius:20px;padding:6px 14px;font-size:.78rem;color:var(--mut);cursor:pointer;transition:.15s;user-select:none}
+  .chip:hover{border-color:#444;color:var(--txt)}
+  .chip.active{background:#1e1e10;border-color:var(--acc);color:var(--acc);font-weight:600}
+  .filters{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:20px}
+
+  .sub-tabs{display:flex;gap:4px;margin-bottom:22px;border-bottom:1px solid var(--line)}
+  .sub-tabs button{background:none;border:none;border-bottom:2px solid transparent;color:var(--mut);padding:10px 16px;font-size:.86rem;cursor:pointer;font-family:inherit;margin-bottom:-1px;display:flex;align-items:center;gap:7px}
+  .sub-tabs button.active{color:var(--acc);border-color:var(--acc);font-weight:600}
+
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:15px}
+  .card{background:var(--card);border:1px solid #20202a;border-radius:var(--radius);padding:18px;transition:.18s;cursor:pointer}
+  .card:hover{transform:translateY(-2px);border-color:#33333e;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+  .card-top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:11px}
+  .badge{font-size:.66rem;font-weight:700;padding:3px 9px;border-radius:20px;text-transform:uppercase;letter-spacing:.3px;white-space:nowrap}
+  .card-title{font-size:.98rem;font-weight:700;line-height:1.35;margin-bottom:7px}
+  .card-desc{font-size:.8rem;color:var(--mut);line-height:1.55;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+  .card-foot{margin-top:13px;padding-top:11px;border-top:1px solid #1d1d24;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+  .tag{font-size:.67rem;background:#1f1f26;color:var(--mut);padding:2px 8px;border-radius:6px}
+  .dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-left:auto}
+  .has-script{font-size:.65rem;color:var(--acc);margin-left:auto}
+  .add-card{border:2px dashed var(--line);background:none;border-radius:var(--radius);min-height:130px;display:flex;align-items:center;justify-content:center;gap:8px;color:var(--mut2);font-size:.85rem;cursor:pointer;transition:.15s}
+  .add-card:hover{border-color:var(--acc);color:var(--acc)}
+  .sel{background:transparent;border:1px solid var(--line);border-radius:8px;padding:3px 7px;font-size:.7rem;color:var(--mut);cursor:pointer;outline:none;font-family:inherit}
+  .sel option{background:#1a1a1f}
+
+  /* GALLERY */
+  .gal{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px}
+  .thumb{background:var(--card);border:1px solid #20202a;border-radius:12px;overflow:hidden;transition:.18s;cursor:pointer}
+  .thumb:hover{transform:translateY(-2px);border-color:#33333e}
+  .thumb .img{aspect-ratio:16/9;background:#1c1c22 center/cover no-repeat;display:flex;align-items:center;justify-content:center;color:var(--mut2);font-size:.75rem}
+  .thumb.ref .img{aspect-ratio:9/16}
+  .thumb-body{padding:11px 13px}
+  .thumb-body h4{font-size:.84rem;font-weight:600;line-height:1.3;margin-bottom:3px}
+  .thumb-body span{font-size:.72rem;color:var(--mut)}
+
+  /* FINANZAS */
+  .stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:13px;margin-bottom:24px}
+  .stat{background:var(--card);border:1px solid #20202a;border-radius:12px;padding:16px 18px}
+  .stat .lbl{font-size:.72rem;color:var(--mut);text-transform:uppercase;letter-spacing:.5px}
+  .stat .val{font-size:1.5rem;font-weight:900;margin-top:6px;letter-spacing:-.5px}
+  table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid #20202a;border-radius:12px;overflow:hidden}
+  th{text-align:left;font-size:.7rem;text-transform:uppercase;letter-spacing:.5px;color:var(--mut);padding:11px 14px;border-bottom:1px solid var(--line);background:#131316}
+  td{padding:11px 14px;border-bottom:1px solid #1c1c22;font-size:.84rem}
+  tr:last-child td{border-bottom:none}
+  tr:hover td{background:#18181c}
+  .pill{font-size:.68rem;padding:2px 9px;border-radius:20px;font-weight:600}
+  .num{font-variant-numeric:tabular-nums;font-weight:700;text-align:right;white-space:nowrap}
+  .pos{color:var(--green)} .neg{color:var(--red)}
+  .mini-btn{background:#1f1f26;border:1px solid var(--line);color:var(--mut);cursor:pointer;font-size:.72rem;padding:3px 9px;border-radius:7px;transition:.15s}
+  .mini-btn:hover{color:var(--acc);border-color:#44441f}
+
+  /* DASHBOARD */
+  .dash-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}
+  .widget{background:var(--card);border:1px solid #20202a;border-radius:var(--radius);padding:20px}
+  .widget h3{font-size:.78rem;text-transform:uppercase;letter-spacing:.6px;color:var(--mut);margin-bottom:14px;display:flex;align-items:center;gap:8px}
+  .wlist{display:flex;flex-direction:column;gap:9px}
+  .wrow{display:flex;align-items:center;gap:10px;font-size:.85rem;padding:7px 0;border-bottom:1px solid #1b1b21}
+  .wrow:last-child{border-bottom:none}
+  .wrow .r-title{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .empty{text-align:center;padding:60px 20px;color:var(--mut2);font-size:.88rem;grid-column:1/-1}
+
+  /* EDITOR (Notion-style) */
+  .editor{max-width:820px}
+  .ed-back{background:none;border:none;color:var(--mut);font-size:.84rem;cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:7px;margin-bottom:18px;padding:6px 0}
+  .ed-back:hover{color:var(--txt)}
+  .ed-save{font-size:.74rem;color:var(--mut2);margin-left:auto}
+  .ed-save.on{color:var(--green)}
+  .ed-title{width:100%;background:none;border:none;outline:none;color:var(--txt);font-size:2rem;font-weight:900;letter-spacing:-.8px;font-family:inherit;line-height:1.2;margin-bottom:6px}
+  .ed-title::placeholder{color:var(--mut2)}
+  .ed-sub{width:100%;background:none;border:none;outline:none;color:var(--mut);font-size:1rem;font-family:inherit;margin-bottom:18px}
+  .ed-sub::placeholder{color:var(--mut2)}
+  .ed-meta{display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:14px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);margin-bottom:22px}
+  .ed-meta .mlbl{font-size:.7rem;color:var(--mut2);text-transform:uppercase;letter-spacing:.5px;margin-right:2px}
+  .ed-body{width:100%;background:none;border:none;outline:none;color:var(--txt);font-size:.96rem;line-height:1.75;font-family:inherit;resize:none;min-height:50vh;overflow:hidden}
+  .ed-body::placeholder{color:var(--mut2)}
+  .ed-del{background:none;border:1px solid #7f1d1d;color:var(--red);padding:8px 14px;border-radius:9px;cursor:pointer;font-size:.8rem;font-family:inherit;margin-top:30px}
+  .ed-del:hover{background:#7f1d1d33}
+
+  /* CALENDAR */
+  .cal-wrap{display:grid;grid-template-columns:1fr 270px;gap:20px;align-items:start}
+  @media(max-width:900px){.cal-wrap{grid-template-columns:1fr}}
+  .cal-head{display:flex;align-items:center;gap:14px;margin-bottom:14px}
+  .cal-head h2{font-size:1.1rem;font-weight:800;min-width:180px}
+  .cal-nav{background:#161618;border:1px solid var(--line);color:var(--txt);width:32px;height:32px;border-radius:8px;cursor:pointer;font-size:1rem}
+  .cal-nav:hover{border-color:var(--acc)}
+  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+  .cal-dow{font-size:.68rem;text-transform:uppercase;letter-spacing:.5px;color:var(--mut2);text-align:center;padding:4px 0}
+  .cal-cell{background:var(--card);border:1px solid #1d1d24;border-radius:9px;min-height:96px;padding:6px;transition:.12s;display:flex;flex-direction:column;gap:4px}
+  .cal-cell.other{opacity:.35}
+  .cal-cell.today{border-color:var(--acc)}
+  .cal-cell.drop{border-color:var(--acc);background:#1a1a10}
+  .cal-daynum{font-size:.7rem;color:var(--mut);font-weight:600}
+  .cal-chip{font-size:.7rem;padding:3px 7px;border-radius:6px;cursor:grab;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-left:3px solid}
+  .cal-side{background:var(--card);border:1px solid #20202a;border-radius:12px;padding:14px}
+  .cal-side h3{font-size:.74rem;text-transform:uppercase;letter-spacing:.5px;color:var(--mut);margin-bottom:12px}
+  .cal-side.drop{border-color:var(--acc)}
+  .cal-pend{font-size:.78rem;padding:8px 10px;border-radius:8px;background:#1b1b21;margin-bottom:7px;cursor:grab;border-left:3px solid;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .cal-legend{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px;font-size:.74rem;color:var(--mut)}
+  .cal-legend span{display:inline-flex;align-items:center;gap:5px}
+  .cal-legend i{width:10px;height:10px;border-radius:3px;display:inline-block}
+
+  /* MODAL */
+  .overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:100;align-items:center;justify-content:center;padding:20px}
+  .overlay.open{display:flex}
+  .modal{background:var(--bg2);border:1px solid var(--line);border-radius:16px;padding:26px;width:100%;max-width:520px;max-height:90vh;overflow-y:auto}
+  .modal h3{font-size:1.1rem;margin-bottom:18px;font-weight:800}
+  .fg{margin-bottom:13px}
+  .fg label{display:block;font-size:.76rem;color:var(--mut);margin-bottom:6px}
+  .fg input,.fg textarea,.fg select{width:100%;background:#0d0d0f;border:1px solid var(--line);border-radius:9px;padding:10px 12px;color:var(--txt);font-size:.85rem;outline:none;font-family:inherit;transition:.15s}
+  .fg input:focus,.fg textarea:focus,.fg select:focus{border-color:var(--acc)}
+  .fg textarea{resize:vertical;min-height:80px}
+  .modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:20px}
+  .btn-del{background:none;border:1px solid #7f1d1d;color:var(--red);padding:9px 14px;border-radius:9px;cursor:pointer;font-size:.83rem;margin-right:auto;font-family:inherit}
+  .btn-del:hover{background:#7f1d1d33}
+  .banner{background:#1e1e10;border:1px solid #44441f;color:var(--acc);font-size:.78rem;padding:10px 14px;border-radius:10px;margin-bottom:20px;display:flex;align-items:center;gap:10px}
+  .banner b{color:var(--acc2)}
+  code{background:#0d0d0f;border:1px solid var(--line);padding:1px 6px;border-radius:5px;font-size:.8rem}
+  a{color:var(--acc)}
+  @media(max-width:760px){.sidebar{display:none}.main{padding:22px 16px}.cal-cell{min-height:70px}}
+</style>
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="brand">BASE DE<br><b>OPERACIONES</b><small>@victorapolo</small></div>
+  <nav class="nav" id="nav">
+    <button data-sec="dashboard" class="active"><span class="ico">🏠</span> Dashboard</button>
+    <button data-sec="reel"><span class="ico">🎬</span> Reels <span class="count" id="c-reel">0</span></button>
+    <button data-sec="youtube"><span class="ico">▶️</span> YouTube <span class="count" id="c-youtube">0</span></button>
+    <button data-sec="recursos"><span class="ico">🧰</span> Recursos <span class="count" id="c-recursos">0</span></button>
+    <button data-sec="finanzas"><span class="ico">💰</span> Finanzas</button>
+  </nav>
+  <div class="side-foot">
+    <button onclick="openConfig()" style="display:flex;align-items:center;gap:11px;background:none;border:none;color:var(--mut);font-size:.82rem;padding:10px 12px;border-radius:10px;cursor:pointer;width:100%;font-family:inherit">
+      <span class="ico">⚙️</span> Conexión <span class="sync-dot sync-local" id="syncDot"></span>
+    </button>
+  </div>
+</aside>
+
+<main class="main" id="main"></main>
+<div class="overlay" id="overlay"><div class="modal" id="modal"></div></div>
+
+<script>
+/* ============================================================
+   DATA LAYER  (Supabase ó localStorage)
+   ============================================================ */
+const TABLES=['ideas','recursos','miniaturas','referencias','movimientos','impuestos','pagos_proximos'];
+const CFG_KEY='baseops_cfg';
+// Conexión por defecto a tu proyecto Supabase (se conecta solo al abrir).
+// La publishable key está pensada para apps cliente; el acceso lo controla RLS.
+const DEFAULT_CFG={url:'https://bibczdhlvyjrjturrwns.supabase.co',key:'sb_publishable_xOeLFbLHhggEWfv_UvX_vg_ktgBxTHp'};
+let cfg=JSON.parse(localStorage.getItem(CFG_KEY)||'null')||DEFAULT_CFG;
+let sb=null, CLOUD=false, cache={};
+
+function initSupabase(){
+  if(cfg.url&&cfg.key&&window.supabase){try{sb=window.supabase.createClient(cfg.url,cfg.key);CLOUD=true;}catch(e){CLOUD=false;}}else CLOUD=false;
+  const dot=document.getElementById('syncDot'); if(dot)dot.className='sync-dot '+(CLOUD?'sync-cloud':'sync-local');
+}
+const db={
+  async list(t){ if(CLOUD){const{data,error}=await sb.from(t).select('*').order('created_at',{ascending:false});if(error){console.warn(error);return[];}return data||[];}
+    return JSON.parse(localStorage.getItem('baseops_'+t)||'[]'); },
+  async insert(t,row){ if(CLOUD){const{data,error}=await sb.from(t).insert(row).select();if(error){alert('Error: '+error.message);return null;}return data[0];}
+    const a=JSON.parse(localStorage.getItem('baseops_'+t)||'[]');row.id=crypto.randomUUID();row.created_at=new Date().toISOString();a.unshift(row);localStorage.setItem('baseops_'+t,JSON.stringify(a));return row; },
+  async update(t,id,patch){ if(CLOUD){const{error}=await sb.from(t).update(patch).eq('id',id);if(error)alert('Error: '+error.message);return;}
+    const a=JSON.parse(localStorage.getItem('baseops_'+t)||'[]');const i=a.findIndex(r=>r.id===id);if(i>-1){a[i]={...a[i],...patch};localStorage.setItem('baseops_'+t,JSON.stringify(a));} },
+  async remove(t,id){ if(CLOUD){const{error}=await sb.from(t).delete().eq('id',id);if(error)alert('Error: '+error.message);return;}
+    let a=JSON.parse(localStorage.getItem('baseops_'+t)||'[]');a=a.filter(r=>r.id!==id);localStorage.setItem('baseops_'+t,JSON.stringify(a)); }
+};
+async function refreshAll(){for(const t of TABLES){cache[t]=await db.list(t);}migrate();updateCounts();}
+function updateCounts(){
+  const ideas=cache.ideas||[];
+  const cr=document.getElementById('c-reel'),cy=document.getElementById('c-youtube'),crr=document.getElementById('c-recursos');
+  if(cr)cr.textContent=ideas.filter(i=>i.seccion==='reel').length;
+  if(cy)cy.textContent=ideas.filter(i=>i.seccion==='youtube').length;
+  if(crr)crr.textContent=(cache.recursos||[]).length;
+}
+/* migra registros antiguos (categoria youtube -> seccion, etc.) — solo local */
+function migrate(){
+  if(CLOUD)return;
+  let changed=false;
+  (cache.ideas||[]).forEach(i=>{
+    if(!i.seccion){
+      if(i.categoria==='youtube'){i.seccion='youtube';i.categoria='tutorial';}
+      else{i.seccion='reel';i.categoria=(i.categoria==='colaboracion')?'colab':'organico';}
+      changed=true;
+    }
+    if(i.contenido===undefined){i.contenido='';changed=true;}
+    if(i.fecha_pub===undefined){i.fecha_pub=null;changed=true;}
+  });
+  // importar guiones antiguos como contenido si existieran
+  const oldG=JSON.parse(localStorage.getItem('baseops_guiones')||'[]');
+  if(oldG.length){oldG.forEach(g=>{const idea=(cache.ideas||[]).find(i=>i.id===g.idea_id);if(idea&&!idea.contenido)idea.contenido=g.contenido||'';});localStorage.removeItem('baseops_guiones');changed=true;}
+  (cache.referencias||[]).forEach(r=>{if(!r.seccion){r.seccion='reel';changed=true;}});
+  if(changed){localStorage.setItem('baseops_ideas',JSON.stringify(cache.ideas));localStorage.setItem('baseops_referencias',JSON.stringify(cache.referencias));}
+}
+
+/* SEED demo */
+function seedDemo(){
+  if(localStorage.getItem('baseops_seeded_v2'))return;
+  const yt=[
+    ['ChatGPT Image 2 — todo lo que necesitas saber (es brutal)','Review profunda, comparativa Nano Banana 2, ángulo filmmaker. Primer vídeo.','tutorial','publicado','alta'],
+    ['¿Por qué debes utilizar la IA en 2026 si eres editor?','6 verdades incómodas. Tono confrontacional, estilo Mirko.','opinion','proceso','alta'],
+    ['Cómo empezar a usar la IA en tus vídeos desde cero','Starter pack principiantes. SEO largo plazo. Sponsor Magnific.','tutorial','idea','media'],
+    ['Guía completa Seedance 2.0','Tutorial profundo, estructura de prompts, demos cliente.','tutorial','idea','media'],
+    ['5 IAs Productividad Filmmaker','Lista de 5 herramientas que ahorran horas. Alto CTR.','tutorial','idea','media'],
+    ['Setup + Organización: YouTube en 2026','Meta/BTS. Luchar contra la fricción. Tour del setup, NAS.','lifestyle','idea','baja'],
+  ].map(a=>({id:crypto.randomUUID(),titulo:a[0],descripcion:a[1],contenido:'',seccion:'youtube',categoria:a[2],estado:a[3],prioridad:a[4],tags:[],fecha_pub:null,created_at:new Date().toISOString()}));
+  const reels=[
+    ['Freeze Frame 360 Orbit','Freeze + órbita 360 con IA. Hook potente visual.','organico','idea','alta'],
+    ['Modo Mosca (fly-vision producto)','FPV macro ultra-wide surfeando el producto.','organico','idea','media'],
+  ].map(a=>({id:crypto.randomUUID(),titulo:a[0],descripcion:a[1],contenido:'',seccion:'reel',categoria:a[2],estado:a[3],prioridad:a[4],tags:[],fecha_pub:null,created_at:new Date().toISOString()}));
+  localStorage.setItem('baseops_ideas',JSON.stringify([...reels,...yt]));
+  localStorage.setItem('baseops_recursos',JSON.stringify([
+    {id:crypto.randomUUID(),titulo:'Magnific (antes Freepik)',url:'https://referral.magnific.com/mQMbSme',tipo:'herramienta',notas:'Generación visual IA. Afiliado.',tags:['IA','afiliado'],created_at:new Date().toISOString()},
+    {id:crypto.randomUUID(),titulo:'Wispr',url:'',tipo:'herramienta',notas:'Dictado por voz. Afiliado.',tags:['productividad'],created_at:new Date().toISOString()},
+  ]));
+  localStorage.setItem('baseops_miniaturas',JSON.stringify([
+    {id:crypto.randomUUID(),titulo:'Fórmula thumbnails Zane Hoyer',fuente:'Zane Hoyer',notas:'cara + texto 3D + resultado + cursor.',tags:['referencia'],created_at:new Date().toISOString()},
+  ]));
+  localStorage.setItem('baseops_referencias',JSON.stringify([
+    {id:crypto.randomUUID(),titulo:'FPV atardecer acantilado',autor:'@alex_uspk',plataforma:'reel',seccion:'reel',notas:'5M views 24h. Estructura FPV para replicar con IA.',tags:['FPV','viral'],created_at:new Date().toISOString()},
+  ]));
+  localStorage.setItem('baseops_pagos_proximos',JSON.stringify([
+    {id:crypto.randomUUID(),concepto:'Cuota autónomo SS',importe:230,recurrente:'mensual',pagado:false,created_at:new Date().toISOString()},
+    {id:crypto.randomUUID(),concepto:'Suscripción Magnific',importe:39,recurrente:'mensual',pagado:false,created_at:new Date().toISOString()},
+  ]));
+  localStorage.setItem('baseops_impuestos',JSON.stringify([
+    {id:crypto.randomUUID(),modelo:'130',periodo:'2026-T2',importe:0,fecha_limite:'2026-07-20',pagado:false,notas:'IRPF',created_at:new Date().toISOString()},
+    {id:crypto.randomUUID(),modelo:'303',periodo:'2026-T2',importe:0,fecha_limite:'2026-07-20',pagado:false,notas:'IVA',created_at:new Date().toISOString()},
+  ]));
+  localStorage.setItem('baseops_seeded_v2','1');
+}
+
+/* ============================================================
+   HELPERS
+   ============================================================ */
+const $=s=>document.querySelector(s);
+const esc=s=>(s||'').toString().replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const eur=n=>(Number(n)||0).toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2})+' €';
+const arr=v=>Array.isArray(v)?v:(v?String(v).split(',').map(x=>x.trim()).filter(Boolean):[]);
+const pad=n=>String(n).padStart(2,'0');
+const ymd=(y,m,d)=>`${y}-${pad(m+1)}-${pad(d)}`;
+function fdate(d){if(!d)return'';const x=new Date(d);return x.toLocaleDateString('es-ES',{day:'2-digit',month:'short',year:'numeric'});}
+const todayISO=()=>{const d=new Date();return ymd(d.getFullYear(),d.getMonth(),d.getDate());};
+const qOf=ds=>Math.floor(new Date(ds).getMonth()/3)+1;
+const yOf=ds=>new Date(ds).getFullYear();
+const ivaPct=m=>(m.iva!=null&&m.iva!=='')?Number(m.iva):21;
+const ivaOf=m=>(Number(m.importe)||0)*ivaPct(m)/100;
+const amortAnual=m=>(Number(m.importe)||0)/(Number(m.amort_anios)||4);
+function irpfEstimate(base){const b=Math.max(0,base);const tr=[[12450,.19],[20200,.24],[35200,.30],[60000,.37],[300000,.45],[Infinity,.47]];let prev=0,tax=0;for(const[lim,r]of tr){const amt=Math.min(b,lim)-prev;if(amt>0)tax+=amt*r;prev=lim;if(b<=lim)break;}return tax;}
+
+const SECTIONS={
+  reel:{label:'🎬 Reels',name:'Reels',tabs:['ideas','calendario','referencias'],
+    cats:{organico:['Orgánico','#f472b6'],colab:['Colaboración','#a78bfa'],tendencia:['Tendencia','#e8ff39']}},
+  youtube:{label:'▶️ YouTube',name:'YouTube',tabs:['ideas','calendario','miniaturas','referencias'],
+    cats:{tutorial:['Tutorial','#38bdf8'],lifestyle:['Lifestyle','#4ade80'],opinion:['Opinión','#f59e0b']}},
+};
+const EST={idea:['Idea','#7a7a82'],proceso:['En proceso','#f59e0b'],grabado:['Grabado','#38bdf8'],publicado:['Publicado','#4ade80']};
+const PRI={alta:'#f87171',media:'#f59e0b',baja:'#4ade80'};
+const TABNAME={ideas:'📋 Ideas',calendario:'📅 Calendario',referencias:'🎬 Referencias',miniaturas:'🖼️ Miniaturas'};
+function badge(t,c){return `<span class="badge" style="background:${c}22;color:${c};border:1px solid ${c}44">${t}</span>`;}
+function catColor(sec,cat){const c=SECTIONS[sec].cats[cat];return c?c[1]:'#7a7a82';}
+function catName(sec,cat){const c=SECTIONS[sec].cats[cat];return c?c[0]:cat;}
+
+/* ============================================================
+   NAV
+   ============================================================ */
+let SEC='dashboard', subTab={reel:'ideas',youtube:'ideas'}, ideaFilter={reel:'all',youtube:'all'};
+document.getElementById('nav').addEventListener('click',e=>{
+  const b=e.target.closest('button[data-sec]');if(!b)return;
+  document.querySelectorAll('#nav button').forEach(x=>x.classList.remove('active'));b.classList.add('active');
+  SEC=b.dataset.sec;editing=null;render();
+});
+function render(){
+  if(SEC==='dashboard')return renderDashboard();
+  if(SEC==='recursos')return renderRecursos();
+  if(SEC==='finanzas')return renderFinanzas();
+  if(SEC==='reel'||SEC==='youtube')return renderSection(SEC);
+}
+
+/* ============================================================
+   DASHBOARD
+   ============================================================ */
+function renderDashboard(){
+  const ideas=cache.ideas||[];
+  const act=ideas.filter(i=>i.estado!=='publicado');
+  const prod=ideas.filter(i=>i.estado==='proceso'||i.estado==='grabado');
+  const mov=cache.movimientos||[];
+  const ingresos=mov.filter(m=>m.tipo==='ingreso'&&m.estado!=='pendiente'&&m.estado!=='previsto').reduce((s,m)=>s+Number(m.importe||0),0);
+  const gastos=mov.filter(m=>m.tipo==='gasto').reduce((s,m)=>s+Number(m.importe||0),0);
+  const pend=mov.filter(m=>m.tipo==='ingreso'&&m.estado==='pendiente').reduce((s,m)=>s+Number(m.importe||0),0);
+  const pagos=(cache.pagos_proximos||[]).filter(p=>!p.pagado);
+  const imp=(cache.impuestos||[]).filter(i=>!i.pagado);
+  const prox=ideas.filter(i=>i.fecha_pub).sort((a,b)=>a.fecha_pub.localeCompare(b.fecha_pub)).slice(0,6);
+  $('#main').innerHTML=`
+  <div class="pagehead"><div><h1>Hola, Víctor 👋</h1><p>Tu base de operaciones. Todo en un sitio.</p></div></div>
+  ${CLOUD?'':`<div class="banner">⚠️ Estás en <b>modo local</b>. Para que perdure y sincronice, conecta Supabase en <b>⚙️ Conexión</b>.</div>`}
+  <div class="stats-row">
+    <div class="stat"><div class="lbl">🎬 Reels activos</div><div class="val">${act.filter(i=>i.seccion==='reel').length}</div></div>
+    <div class="stat"><div class="lbl">▶️ YouTube activos</div><div class="val">${act.filter(i=>i.seccion==='youtube').length}</div></div>
+    <div class="stat"><div class="lbl">💰 Balance</div><div class="val ${ingresos-gastos>=0?'pos':'neg'}">${eur(ingresos-gastos)}</div></div>
+    <div class="stat"><div class="lbl">⏳ Pendiente cobro</div><div class="val" style="color:var(--blue)">${eur(pend)}</div></div>
+  </div>
+  <div class="dash-grid">
+    <div class="widget"><h3>🎬 En producción</h3><div class="wlist">
+      ${prod.length?prod.map(i=>`<div class="wrow"><span class="dot" style="margin:0;background:${EST[i.estado][1]}"></span><span class="r-title">${esc(i.titulo)}</span>${badge(SECTIONS[i.seccion].name,catColor(i.seccion,i.categoria))}</div>`).join(''):'<div style="color:var(--mut2);font-size:.84rem">Nada en producción.</div>'}
+    </div></div>
+    <div class="widget"><h3>📅 Próximas publicaciones</h3><div class="wlist">
+      ${prox.length?prox.map(i=>`<div class="wrow"><span class="r-title">${esc(i.titulo)}</span><span class="tag">${fdate(i.fecha_pub)}</span></div>`).join(''):'<div style="color:var(--mut2);font-size:.84rem">Nada programado. Usa el calendario.</div>'}
+    </div></div>
+    <div class="widget"><h3>📌 Próximos pagos</h3><div class="wlist">
+      ${pagos.length?pagos.map(p=>`<div class="wrow"><span class="r-title">${esc(p.concepto)}</span><span class="num">${eur(p.importe)}</span><span class="tag">${p.recurrente}</span></div>`).join(''):'<div style="color:var(--mut2);font-size:.84rem">Sin pagos pendientes 🎉</div>'}
+    </div></div>
+    <div class="widget"><h3>🧾 Impuestos pendientes</h3><div class="wlist">
+      ${imp.length?imp.map(i=>`<div class="wrow"><span class="r-title">Modelo ${esc(i.modelo)} · ${esc(i.periodo)}</span><span class="tag">${fdate(i.fecha_limite)||'—'}</span></div>`).join(''):'<div style="color:var(--mut2);font-size:.84rem">Todo al día.</div>'}
+    </div></div>
+  </div>`;
+}
+
+/* ============================================================
+   SECTION (Reels / YouTube)  con sub-tabs
+   ============================================================ */
+function renderSection(sec){
+  if(editing){return renderEditor();}
+  const S=SECTIONS[sec],tab=subTab[sec];
+  $('#main').innerHTML=`
+  <div class="pagehead"><div><h1>${S.label}</h1><p>Tus ideas, guiones y planificación de ${S.name}.</p></div>
+    ${tab==='ideas'?`<button class="btn" onclick="newIdea('${sec}')">+ Nueva idea</button>`:''}
+    ${tab==='referencias'?`<button class="btn" onclick="openForm('referencias',null,{seccion:'${sec}'})">+ Referencia</button>`:''}
+    ${tab==='miniaturas'?`<button class="btn" onclick="openForm('miniaturas')">+ Miniatura</button>`:''}
+  </div>
+  <div class="sub-tabs">${S.tabs.map(t=>`<button class="${tab===t?'active':''}" onclick="subTab['${sec}']='${t}';render()">${TABNAME[t]}</button>`).join('')}</div>
+  <div id="secBody"></div>`;
+  if(tab==='ideas')renderIdeaList(sec);
+  else if(tab==='calendario')renderCalendar(sec);
+  else if(tab==='referencias')renderRefs(sec);
+  else if(tab==='miniaturas')renderMiniaturas();
+}
+
+function renderIdeaList(sec){
+  const S=SECTIONS[sec],f=ideaFilter[sec];
+  const items=(cache.ideas||[]).filter(i=>i.seccion===sec&&(f==='all'||i.categoria===f));
+  $('#secBody').innerHTML=`
+  <div class="filters">
+    <div class="chip ${f==='all'?'active':''}" onclick="ideaFilter['${sec}']='all';render()">Todas</div>
+    ${Object.entries(S.cats).map(([k,v])=>`<div class="chip ${f===k?'active':''}" onclick="ideaFilter['${sec}']='${k}';render()">${v[0]}</div>`).join('')}
+  </div>
+  <div class="grid">
+    ${items.length?items.map(i=>ideaCard(i,sec)).join(''):'<div class="empty">No hay ideas aquí. Crea la primera 👆</div>'}
+    <div class="add-card" onclick="newIdea('${sec}')">＋ Nueva idea</div>
+  </div>`;
+}
+function ideaCard(i,sec){
+  const cc=catColor(sec,i.categoria);
+  return `<div class="card" onclick="openEditor('${i.id}')">
+    <div class="card-top">${badge(catName(sec,i.categoria),cc)}
+      <select class="sel" onclick="event.stopPropagation()" onchange="quickUpdate('${i.id}','estado',this.value)">
+        ${Object.entries(EST).map(([k,v])=>`<option value="${k}" ${i.estado===k?'selected':''}>${v[0]}</option>`).join('')}
+      </select></div>
+    <div class="card-title">${esc(i.titulo)||'Sin título'}</div>
+    <div class="card-desc">${esc(i.descripcion||i.contenido||'')||'Sin descripción. Clica para abrir y escribir el guion.'}</div>
+    <div class="card-foot">${arr(i.tags).slice(0,3).map(t=>`<span class="tag">${esc(t)}</span>`).join('')}
+      ${i.contenido&&i.contenido.trim()?'<span class="has-script">📝 guion</span>':''}
+      <span class="dot" style="background:${PRI[i.prioridad]||PRI.media}"></span></div>
+  </div>`;
+}
+
+/* ============================================================
+   EDITOR (Notion-style, autosave)
+   ============================================================ */
+let editing=null, saveTimer=null, edHist=[], edPos=-1;
+function snapEditor(){return {titulo:$('#edTitle').value,descripcion:$('#edSub').value,contenido:$('#edBody').value,categoria:$('#edCat').value,estado:$('#edEst').value,prioridad:$('#edPri').value,fecha_pub:$('#edDate').value,tags:$('#edTags').value};}
+function applyEditorState(s){$('#edTitle').value=s.titulo;$('#edSub').value=s.descripcion;$('#edBody').value=s.contenido;$('#edCat').value=s.categoria;$('#edEst').value=s.estado;$('#edPri').value=s.prioridad;$('#edDate').value=s.fecha_pub;$('#edTags').value=s.tags;autosize($('#edBody'));}
+function initHistory(){edHist=[snapEditor()];edPos=0;}
+function commitHistory(){if(!$('#edTitle'))return;const s=snapEditor();if(edPos>=0&&JSON.stringify(s)===JSON.stringify(edHist[edPos]))return;edHist=edHist.slice(0,edPos+1);edHist.push(s);if(edHist.length>80){edHist.shift();}edPos=edHist.length-1;}
+function undoEditor(){commitHistory();if(edPos>0){edPos--;applyEditorState(edHist[edPos]);autoSave();flashSave('Deshecho ↶');}}
+function redoEditor(){if(edPos<edHist.length-1){edPos++;applyEditorState(edHist[edPos]);autoSave();flashSave('Rehecho ↷');}}
+function flashSave(t){const s=$('#edSave');if(s){s.textContent=t;s.classList.add('on');}}
+function edChange(){commitHistory();autoSave();}
+function newIdea(sec){
+  const S=SECTIONS[sec],firstCat=Object.keys(S.cats)[0];
+  db.insert('ideas',{titulo:'',descripcion:'',contenido:'',seccion:sec,categoria:firstCat,estado:'idea',prioridad:'media',tags:[],fecha_pub:null}).then(async r=>{
+    cache.ideas=await db.list('ideas');migrate();updateCounts();openEditor(r.id);
+  });
+}
+function openEditor(id){editing=id;render();}
+function renderEditor(){
+  const i=(cache.ideas||[]).find(x=>x.id===editing);
+  if(!i){editing=null;return render();}
+  const sec=i.seccion,S=SECTIONS[sec];
+  $('#main').innerHTML=`
+  <div class="editor">
+    <div style="display:flex;align-items:center">
+      <button class="ed-back" onclick="closeEditor()">← Volver a ${S.name}</button>
+      <span class="ed-save" id="edSave">Guardado ✓</span>
+      <span style="font-size:.7rem;color:var(--mut2);margin-left:10px">⌘/Ctrl+Z deshacer</span>
+    </div>
+    <input class="ed-title" id="edTitle" placeholder="Título de la idea…" value="${esc(i.titulo)}">
+    <input class="ed-sub" id="edSub" placeholder="Una frase: ¿de qué va? (opcional)" value="${esc(i.descripcion||'')}">
+    <div class="ed-meta">
+      <span class="mlbl">Categoría</span>
+      <select class="sel" id="edCat" onchange="edChange()">${Object.entries(S.cats).map(([k,v])=>`<option value="${k}" ${i.categoria===k?'selected':''}>${v[0]}</option>`).join('')}</select>
+      <span class="mlbl">Estado</span>
+      <select class="sel" id="edEst" onchange="edChange()">${Object.entries(EST).map(([k,v])=>`<option value="${k}" ${i.estado===k?'selected':''}>${v[0]}</option>`).join('')}</select>
+      <span class="mlbl">Prioridad</span>
+      <select class="sel" id="edPri" onchange="edChange()">${['alta','media','baja'].map(p=>`<option value="${p}" ${i.prioridad===p?'selected':''}>${p}</option>`).join('')}</select>
+      <span class="mlbl">Publicar</span>
+      <input class="sel" type="date" id="edDate" value="${i.fecha_pub||''}" onchange="edChange()" style="color-scheme:dark">
+    </div>
+    <div class="fg" style="margin-bottom:18px"><input class="sel" style="width:100%;padding:8px 12px" id="edTags" placeholder="Tags separados por coma" value="${esc(arr(i.tags).join(', '))}" oninput="debounceSave()"></div>
+    <textarea class="ed-body" id="edBody" placeholder="Escribe aquí tu guion…  (gancho, desarrollo, cierre con CTA)" oninput="autosize(this);debounceSave()">${esc(i.contenido||'')}</textarea>
+    <div><button class="ed-del" onclick="delIdea()">🗑 Borrar idea</button></div>
+  </div>`;
+  const ta=$('#edBody');autosize(ta);
+  ['edTitle','edSub'].forEach(id=>$('#'+id).addEventListener('input',debounceSave));
+  initHistory();
+}
+function autosize(el){el.style.height='auto';el.style.height=Math.max(el.scrollHeight,window.innerHeight*0.5)+'px';}
+function debounceSave(){clearTimeout(saveTimer);const s=$('#edSave');if(s){s.textContent='Guardando…';s.classList.remove('on');}saveTimer=setTimeout(()=>{commitHistory();autoSave();},700);}
+async function autoSave(){
+  if(!editing)return;clearTimeout(saveTimer);
+  const patch={titulo:$('#edTitle').value,descripcion:$('#edSub').value,contenido:$('#edBody').value,
+    categoria:$('#edCat').value,estado:$('#edEst').value,prioridad:$('#edPri').value,
+    fecha_pub:$('#edDate').value||null,tags:arr($('#edTags').value)};
+  await db.update('ideas',editing,patch);
+  const idx=(cache.ideas||[]).findIndex(x=>x.id===editing);if(idx>-1)cache.ideas[idx]={...cache.ideas[idx],...patch};
+  updateCounts();const s=$('#edSave');if(s){s.textContent='Guardado ✓';s.classList.add('on');}
+}
+async function closeEditor(){await autoSave();editing=null;render();}
+async function delIdea(){if(!confirm('¿Borrar esta idea y su guion?'))return;await db.remove('ideas',editing);cache.ideas=await db.list('ideas');migrate();updateCounts();editing=null;render();}
+async function quickUpdate(id,field,value){await db.update('ideas',id,{[field]:value});const r=(cache.ideas||[]).find(x=>x.id===id);if(r)r[field]=value;}
+
+/* ============================================================
+   CALENDAR
+   ============================================================ */
+let calCursor=new Date();calCursor.setDate(1);
+let draggedId=null;
+function renderCalendar(sec){
+  const S=SECTIONS[sec];
+  const y=calCursor.getFullYear(),m=calCursor.getMonth();
+  const monthName=calCursor.toLocaleDateString('es-ES',{month:'long',year:'numeric'});
+  const first=new Date(y,m,1);let startDow=(first.getDay()+6)%7; // lunes=0
+  const daysInMonth=new Date(y,m+1,0).getDate();
+  const todayStr=ymd(new Date().getFullYear(),new Date().getMonth(),new Date().getDate());
+  const ideas=(cache.ideas||[]).filter(i=>i.seccion===sec);
+  const byDate={};ideas.filter(i=>i.fecha_pub).forEach(i=>{(byDate[i.fecha_pub]=byDate[i.fecha_pub]||[]).push(i);});
+  const pend=ideas.filter(i=>!i.fecha_pub);
+  const dows=['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
+  let cells='';
+  for(let k=0;k<startDow;k++)cells+=`<div class="cal-cell other"></div>`;
+  for(let d=1;d<=daysInMonth;d++){
+    const ds=ymd(y,m,d);const list=byDate[ds]||[];
+    cells+=`<div class="cal-cell ${ds===todayStr?'today':''}" data-date="${ds}" ondragover="calOver(event,this)" ondragleave="this.classList.remove('drop')" ondrop="calDrop(event,'${ds}',this)">
+      <div class="cal-daynum">${d}</div>
+      ${list.map(i=>`<div class="cal-chip" draggable="true" ondragstart="draggedId='${i.id}'" onclick="openEditor('${i.id}')" style="background:${catColor(sec,i.categoria)}22;border-color:${catColor(sec,i.categoria)};color:${catColor(sec,i.categoria)}" title="${esc(i.titulo)}">${esc(i.titulo)||'Sin título'}</div>`).join('')}
+    </div>`;
+  }
+  $('#secBody').innerHTML=`
+  <div class="cal-legend">${Object.entries(S.cats).map(([k,v])=>`<span><i style="background:${v[1]}"></i>${v[0]}</span>`).join('')}</div>
+  <div class="cal-wrap">
+    <div>
+      <div class="cal-head"><button class="cal-nav" onclick="calMove(-1)">‹</button><h2 style="text-transform:capitalize">${monthName}</h2><button class="cal-nav" onclick="calMove(1)">›</button><button class="btn ghost sm" onclick="calToday()">Hoy</button></div>
+      <div class="cal-grid">${dows.map(d=>`<div class="cal-dow">${d}</div>`).join('')}${cells}</div>
+    </div>
+    <div class="cal-side" id="calSide" ondragover="event.preventDefault();this.classList.add('drop')" ondragleave="this.classList.remove('drop')" ondrop="calUnschedule(event,this)">
+      <h3>📥 Sin programar (${pend.length})</h3>
+      ${pend.length?pend.map(i=>`<div class="cal-pend" draggable="true" ondragstart="draggedId='${i.id}'" onclick="openEditor('${i.id}')" style="border-color:${catColor(sec,i.categoria)}" title="Arrastra a un día">${esc(i.titulo)||'Sin título'}</div>`).join(''):'<div style="color:var(--mut2);font-size:.78rem">Todo programado 🎉</div>'}
+      <div style="font-size:.72rem;color:var(--mut2);margin-top:12px;line-height:1.5">Arrastra una idea a un día para programar su publicación. Arrástrala aquí para desprogramar.</div>
+    </div>
+  </div>`;
+}
+function calOver(e,el){e.preventDefault();el.classList.add('drop');}
+async function calDrop(e,ds,el){e.preventDefault();el.classList.remove('drop');if(!draggedId)return;await setPubDate(draggedId,ds);draggedId=null;}
+async function calUnschedule(e,el){e.preventDefault();el.classList.remove('drop');if(!draggedId)return;await setPubDate(draggedId,null);draggedId=null;}
+async function setPubDate(id,ds){await db.update('ideas',id,{fecha_pub:ds});const r=(cache.ideas||[]).find(x=>x.id===id);if(r)r.fecha_pub=ds;if(!editing&&(SEC==='reel'||SEC==='youtube')&&subTab[SEC]==='calendario')renderCalendar(SEC);else render();}
+function calMove(n){calCursor.setMonth(calCursor.getMonth()+n);renderCalendar(SEC);}
+function calToday(){calCursor=new Date();calCursor.setDate(1);renderCalendar(SEC);}
+
+/* ============================================================
+   REFERENCIAS (por sección) + MINIATURAS
+   ============================================================ */
+function renderRefs(sec){
+  const items=(cache.referencias||[]).filter(r=>r.seccion===sec);
+  $('#secBody').innerHTML=`<div class="gal">
+    ${items.length?items.map(r=>`<div class="thumb ref" onclick="openForm('referencias','${r.id}')">
+      <div class="img" style="${r.url_imagen?`background-image:url('${esc(r.url_imagen)}')`:''}">${r.url_imagen?'':'🎬'}</div>
+      <div class="thumb-body"><h4>${esc(r.titulo)||'Sin título'}</h4><span>${esc(r.autor)||esc(r.plataforma)||''}</span></div></div>`).join(''):'<div class="empty">Añade tu primera referencia 👆</div>'}
+  </div>`;
+}
+function renderMiniaturas(){
+  const items=cache.miniaturas||[];
+  $('#secBody').innerHTML=`<div class="gal">
+    ${items.length?items.map(m=>`<div class="thumb" onclick="openForm('miniaturas','${m.id}')">
+      <div class="img" style="${m.url_imagen?`background-image:url('${esc(m.url_imagen)}')`:''}">${m.url_imagen?'':'🖼️ sin imagen'}</div>
+      <div class="thumb-body"><h4>${esc(m.titulo)||'Sin título'}</h4><span>${esc(m.fuente)||'—'}</span></div></div>`).join(''):'<div class="empty">Añade tu primera referencia de miniatura 👆</div>'}
+  </div>`;
+}
+
+/* ============================================================
+   RECURSOS
+   ============================================================ */
+function renderRecursos(){
+  const items=cache.recursos||[];
+  $('#main').innerHTML=`
+  <div class="pagehead"><div><h1>🧰 Recursos</h1><p>Herramientas y links afiliados de todo lo que usas.</p></div>
+    <button class="btn" onclick="openForm('recursos')">+ Nuevo recurso</button></div>
+  <div class="grid">
+    ${items.length?items.map(r=>`<div class="card" onclick="openForm('recursos','${r.id}')"><div class="card-top">${badge(r.tipo||'link','#38bdf8')}</div>
+      <div class="card-title">${r.url?`<a href="${esc(r.url)}" target="_blank" onclick="event.stopPropagation()">${esc(r.titulo)} ↗</a>`:esc(r.titulo)}</div>
+      <div class="card-desc">${esc(r.notas)}</div>
+      <div class="card-foot">${arr(r.tags).map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</div></div>`).join(''):'<div class="empty">Sin recursos todavía 👆</div>'}
+    <div class="add-card" onclick="openForm('recursos')">＋ Nuevo recurso</div>
+  </div>`;
+}
+
+/* ============================================================
+   FINANZAS
+   ============================================================ */
+let finTab='movimientos';
+function renderFinanzas(){
+  const mov=cache.movimientos||[];
+  const ingresos=mov.filter(m=>m.tipo==='ingreso'&&m.estado!=='pendiente'&&m.estado!=='previsto').reduce((s,m)=>s+Number(m.importe||0),0);
+  const gastos=mov.filter(m=>m.tipo==='gasto').reduce((s,m)=>s+Number(m.importe||0),0);
+  const pend=mov.filter(m=>m.tipo==='ingreso'&&m.estado==='pendiente').reduce((s,m)=>s+Number(m.importe||0),0);
+  const reserva=Math.round(ingresos*0.20);
+  $('#main').innerHTML=`
+  <div class="pagehead"><div><h1>💰 Finanzas</h1><p>Control de autónomo: ingresos, gastos, impuestos y pagos.</p></div></div>
+  <div class="stats-row">
+    <div class="stat"><div class="lbl">Ingresos cobrados</div><div class="val pos">${eur(ingresos)}</div></div>
+    <div class="stat"><div class="lbl">Gastos</div><div class="val neg">${eur(gastos)}</div></div>
+    <div class="stat"><div class="lbl">Balance</div><div class="val ${ingresos-gastos>=0?'pos':'neg'}">${eur(ingresos-gastos)}</div></div>
+    <div class="stat"><div class="lbl">Pendiente cobro</div><div class="val" style="color:var(--blue)">${eur(pend)}</div></div>
+    <div class="stat"><div class="lbl">Reserva impuestos (~20%)</div><div class="val" style="color:var(--orange)">${eur(reserva)}</div></div>
+  </div>
+  <div class="sub-tabs">
+    <button class="${finTab==='movimientos'?'active':''}" onclick="finTab='movimientos';renderFinanzas()">Movimientos</button>
+    <button class="${finTab==='amortizaciones'?'active':''}" onclick="finTab='amortizaciones';renderFinanzas()">📷 Amortizaciones</button>
+    <button class="${finTab==='fiscal'?'active':''}" onclick="finTab='fiscal';renderFinanzas()">🧮 Resumen fiscal</button>
+    <button class="${finTab==='impuestos'?'active':''}" onclick="finTab='impuestos';renderFinanzas()">Impuestos</button>
+    <button class="${finTab==='pagos'?'active':''}" onclick="finTab='pagos';renderFinanzas()">Próximos pagos</button>
+  </div><div id="finBody"></div>`;
+  if(finTab==='movimientos')renderMovTable();
+  else if(finTab==='amortizaciones')renderAmortTable();
+  else if(finTab==='fiscal')renderFiscal();
+  else if(finTab==='impuestos')renderImpTable();
+  else renderPagosTable();
+}
+function renderMovTable(){const mov=cache.movimientos||[];
+  $('#finBody').innerHTML=`<div style="margin-bottom:14px"><button class="btn sm" onclick="openForm('movimientos',null,{iva:21,amort_anios:4,fecha:todayISO(),tipo:'ingreso',estado:'cobrado'})">+ Movimiento</button><span style="font-size:.74rem;color:var(--mut2);margin-left:10px">Importes = BASE sin IVA. El material >300€ se marca solo como amortización.</span></div>
+  <table><thead><tr><th>Fecha</th><th>Concepto</th><th>Cliente</th><th>Categoría</th><th>Estado</th><th class="num">Importe</th><th></th></tr></thead><tbody>
+  ${mov.length?mov.map(m=>{const isIn=m.tipo==='ingreso';const ec={cobrado:'#4ade80',pagado:'#4ade80',pendiente:'#f59e0b',previsto:'#38bdf8'}[m.estado]||'#7a7a82';
+    return `<tr><td>${fdate(m.fecha)}</td><td>${esc(m.concepto)}${m.amort?' <span class="tag" style="color:var(--orange);border:1px solid #f59e0b44">amort.</span>':''}</td><td style="color:var(--mut)">${esc(m.cliente)||'—'}</td><td><span class="tag">${esc(m.categoria)}</span></td><td><span class="pill" style="background:${ec}22;color:${ec}">${esc(m.estado)}</span></td><td class="num ${isIn?'pos':'neg'}">${isIn?'+':'−'}${eur(m.importe)}</td><td><button class="mini-btn" onclick="openForm('movimientos','${m.id}')">✏️</button></td></tr>`;}).join(''):'<tr><td colspan="7" style="text-align:center;color:var(--mut2);padding:40px">Sin movimientos 👆</td></tr>'}
+  </tbody></table>`;}
+function renderImpTable(){const imp=cache.impuestos||[];
+  $('#finBody').innerHTML=`<div style="margin-bottom:14px"><button class="btn sm" onclick="openForm('impuestos')">+ Impuesto</button></div>
+  <table><thead><tr><th>Modelo</th><th>Periodo</th><th>Límite</th><th>Estado</th><th class="num">Importe</th><th></th></tr></thead><tbody>
+  ${imp.length?imp.map(i=>`<tr><td><b>${esc(i.modelo)}</b></td><td>${esc(i.periodo)}</td><td>${fdate(i.fecha_limite)||'—'}</td><td><span class="pill" style="background:${i.pagado?'#4ade8022':'#f59e0b22'};color:${i.pagado?'#4ade80':'#f59e0b'}">${i.pagado?'pagado':'pendiente'}</span></td><td class="num">${eur(i.importe)}</td><td><button class="mini-btn" onclick="openForm('impuestos','${i.id}')">✏️</button></td></tr>`).join(''):'<tr><td colspan="6" style="text-align:center;color:var(--mut2);padding:40px">Sin impuestos 👆</td></tr>'}
+  </tbody></table>`;}
+function renderPagosTable(){const pg=cache.pagos_proximos||[];
+  $('#finBody').innerHTML=`<div style="margin-bottom:14px"><button class="btn sm" onclick="openForm('pagos_proximos')">+ Pago</button></div>
+  <table><thead><tr><th>Concepto</th><th>Frecuencia</th><th>Fecha</th><th>Estado</th><th class="num">Importe</th><th></th></tr></thead><tbody>
+  ${pg.length?pg.map(p=>`<tr><td>${esc(p.concepto)}</td><td><span class="tag">${esc(p.recurrente)}</span></td><td>${fdate(p.fecha)||'—'}</td><td><span class="pill" style="background:${p.pagado?'#4ade8022':'#f59e0b22'};color:${p.pagado?'#4ade80':'#f59e0b'}">${p.pagado?'pagado':'pendiente'}</span></td><td class="num">${eur(p.importe)}</td><td><button class="mini-btn" onclick="openForm('pagos_proximos','${p.id}')">✏️</button></td></tr>`).join(''):'<tr><td colspan="6" style="text-align:center;color:var(--mut2);padding:40px">Sin pagos 👆</td></tr>'}
+  </tbody></table>`;}
+
+/* ── AMORTIZACIONES ── */
+function renderAmortTable(){
+  const assets=(cache.movimientos||[]).filter(m=>m.tipo==='gasto'&&m.amort);
+  const total=assets.reduce((s,m)=>s+(Number(m.importe)||0),0);
+  const cuota=assets.reduce((s,m)=>s+amortAnual(m),0);
+  $('#finBody').innerHTML=`
+  <div class="banner">📷 El material &gt;300€ no se deduce de golpe: se reparte en varios años (amortización). Aquí ves la parte deducible cada año. <b>Estimación orientativa.</b></div>
+  <div class="stats-row">
+    <div class="stat"><div class="lbl">Inversión en material</div><div class="val">${eur(total)}</div></div>
+    <div class="stat"><div class="lbl">Deducible/año (cuota)</div><div class="val pos">${eur(cuota)}</div></div>
+    <div class="stat"><div class="lbl">Activos</div><div class="val">${assets.length}</div></div>
+  </div>
+  <table><thead><tr><th>Concepto</th><th>Compra</th><th class="num">Base</th><th>Años</th><th class="num">Cuota/año</th><th>Periodo</th><th></th></tr></thead><tbody>
+  ${assets.length?assets.map(m=>{const y0=yOf(m.fecha||todayISO());const a=Number(m.amort_anios)||4;return `<tr><td>${esc(m.concepto)}</td><td>${fdate(m.fecha)}</td><td class="num">${eur(m.importe)}</td><td>${a}</td><td class="num pos">${eur(amortAnual(m))}</td><td style="color:var(--mut)">${y0}–${y0+a-1}</td><td><button class="mini-btn" onclick="openForm('movimientos','${m.id}')">✏️</button></td></tr>`;}).join(''):'<tr><td colspan="7" style="text-align:center;color:var(--mut2);padding:40px">Sin material amortizable. Al registrar un gasto &gt;300€ se marca solo aquí.</td></tr>'}
+  </tbody></table>`;
+}
+
+/* ── RESUMEN FISCAL (estimación orientativa) ── */
+let fiscalYear=new Date().getFullYear();
+function renderFiscal(){
+  const mov=cache.movimientos||[];const yr=fiscalYear;
+  const Q={1:{ing:0,gas:0,ivaR:0,ivaS:0},2:{ing:0,gas:0,ivaR:0,ivaS:0},3:{ing:0,gas:0,ivaR:0,ivaS:0},4:{ing:0,gas:0,ivaR:0,ivaS:0}};
+  mov.forEach(m=>{if(!m.fecha||yOf(m.fecha)!==yr)return;const q=qOf(m.fecha);
+    if(m.tipo==='ingreso'){Q[q].ing+=Number(m.importe)||0;Q[q].ivaR+=ivaOf(m);}
+    else{Q[q].ivaS+=ivaOf(m);if(!m.amort)Q[q].gas+=Number(m.importe)||0;}});
+  const amortYear=mov.filter(m=>m.tipo==='gasto'&&m.amort).filter(m=>{const y0=yOf(m.fecha);return yr>=y0&&yr<=y0+(Number(m.amort_anios)||4)-1;}).reduce((s,m)=>s+amortAnual(m),0);
+  let acc130=0,ingYTD=0,gasYTD=0;const m130={};
+  for(let q=1;q<=4;q++){ingYTD+=Q[q].ing;gasYTD+=Q[q].gas;const amortYTD=amortYear*q/4;const ben=ingYTD-gasYTD-amortYTD;const due=Math.max(0,ben*0.20);const pay=Math.max(0,due-acc130);acc130+=pay;m130[q]=pay;}
+  const ingA=Q[1].ing+Q[2].ing+Q[3].ing+Q[4].ing, gasA=Q[1].gas+Q[2].gas+Q[3].gas+Q[4].gas;
+  const ben=ingA-gasA-amortYear, irpf=irpfEstimate(ben-5550);
+  const cards=[1,2,3,4].map(q=>{const iva303=Q[q].ivaR-Q[q].ivaS;return `<div class="stat"><div class="lbl">T${q} · ${yr}</div>
+    <div style="font-size:.72rem;color:var(--mut);margin-top:9px">Modelo 130 (IRPF)</div><div class="val" style="font-size:1.15rem;color:${m130[q]>0?'var(--orange)':'var(--green)'}">${eur(m130[q])}</div>
+    <div style="font-size:.72rem;color:var(--mut);margin-top:9px">Modelo 303 (IVA)</div><div class="val" style="font-size:1.15rem;color:${iva303>=0?'var(--orange)':'var(--green)'}">${iva303<0?'a favor ':''}${eur(Math.abs(iva303))}</div></div>`;}).join('');
+  $('#finBody').innerHTML=`
+  <div class="banner">⚠️ <b>Estimación orientativa, no es asesoramiento fiscal.</b> Asume estimación directa, IVA 21% y pago fraccionado 20%. Confírmalo siempre con tu gestor.</div>
+  <div class="cal-head"><button class="cal-nav" onclick="fiscalYear--;renderFiscal()">‹</button><h2>Año ${yr}</h2><button class="cal-nav" onclick="fiscalYear++;renderFiscal()">›</button></div>
+  <div class="stats-row" style="grid-template-columns:repeat(4,1fr)">${cards}</div>
+  <div class="dash-grid" style="margin-top:6px">
+    <div class="widget"><h3>🧮 Renta anual estimada ${yr}</h3><div class="wlist">
+      <div class="wrow"><span class="r-title">Ingresos</span><span class="num pos">${eur(ingA)}</span></div>
+      <div class="wrow"><span class="r-title">Gastos corrientes</span><span class="num neg">${eur(gasA)}</span></div>
+      <div class="wrow"><span class="r-title">Amortización material</span><span class="num neg">${eur(amortYear)}</span></div>
+      <div class="wrow"><span class="r-title"><b>Beneficio neto</b></span><span class="num ${ben>=0?'pos':'neg'}">${eur(ben)}</span></div>
+      <div class="wrow"><span class="r-title">IRPF estimado (tramos)</span><span class="num" style="color:var(--orange)">${eur(irpf)}</span></div>
+      <div class="wrow"><span class="r-title">Pagos a cuenta 130 del año</span><span class="num">${eur(acc130)}</span></div>
+      <div class="wrow"><span class="r-title"><b>Quedaría por pagar ~</b></span><span class="num" style="color:var(--acc2)">${eur(Math.max(0,irpf-acc130))}</span></div>
+    </div></div>
+    <div class="widget"><h3>ℹ️ Lo que debes saber</h3><div style="font-size:.83rem;color:var(--mut);line-height:1.75">
+      • El <b>modelo 130</b> solo es obligatorio si <b>menos del 70%</b> de tus ingresos llevan retención de IRPF. Si casi todo es de empresas que te retienen, normalmente NO lo presentas.<br>
+      • Como tienes <b>mezcla</b>, te muestro el 130 estimado por si te toca. Las retenciones que ya te aplican se descuentan luego en la renta.<br>
+      • El IRPF anual usa los tramos estatales aproximados menos el mínimo personal (5.550€). Es una guía, no el cálculo oficial.<br>
+      • Cuando hagas las declaraciones reales, <b>pásame el PDF</b> y actualizo los importes oficiales en la pestaña <b>Impuestos</b>.
+    </div></div>
+  </div>`;
+}
+
+/* ============================================================
+   FORM ENGINE (recursos / referencias / miniaturas / finanzas)
+   ============================================================ */
+const FORMS={
+  recursos:{title:'Recurso',fields:[['titulo','Título','text',1],['url','URL','text'],['tipo','Tipo','select',0,[['herramienta','Herramienta'],['preset','Preset'],['asset','Asset'],['link','Link'],['otro','Otro']]],['notas','Notas','textarea'],['tags','Tags (coma)','tags']]},
+  referencias:{title:'Referencia',fields:[['titulo','Título','text'],['url','URL','text'],['url_imagen','URL imagen/preview','text'],['plataforma','Plataforma','select',0,[['reel','Reel'],['youtube','YouTube'],['tiktok','TikTok'],['otro','Otro']]],['autor','Autor','text'],['notas','Notas','textarea'],['tags','Tags (coma)','tags']]},
+  miniaturas:{title:'Miniatura',fields:[['titulo','Título','text'],['url_imagen','URL de la imagen','text'],['fuente','Fuente / autor','text'],['url_video','URL del vídeo','text'],['notas','Notas','textarea'],['tags','Tags (coma)','tags']]},
+  movimientos:{title:'Movimiento',fields:[['concepto','Concepto','text',1],['tipo','Tipo','select',0,[['ingreso','💚 Ingreso'],['gasto','❤️ Gasto']]],['importe','Importe BASE sin IVA (€)','number',1],['iva','IVA %','number'],['fecha','Fecha','date'],['cliente','Cliente / proveedor','text'],['categoria','Categoría','select',0,[['cliente','Cliente'],['software','Software'],['equipo','Equipo / material'],['impuestos','Impuestos'],['general','General']]],['estado','Estado','select',0,[['cobrado','Cobrado'],['pendiente','Pendiente'],['pagado','Pagado'],['previsto','Previsto']]],['amort','Es amortización (material >300€: se deduce en varios años)','check'],['amort_anios','Años de amortización','number'],['notas','Notas','textarea']]},
+  impuestos:{title:'Impuesto',fields:[['modelo','Modelo','select',0,[['130','130 (IRPF)'],['303','303 (IVA)'],['390','390 (IVA anual)'],['100','100 (Renta)'],['otro','Otro']]],['periodo','Periodo','text',0,null,'ej: 2026-T2'],['importe','Importe (€)','number'],['fecha_limite','Fecha límite','date'],['pagado','¿Pagado?','check'],['notas','Notas','textarea']]},
+  pagos_proximos:{title:'Pago próximo',fields:[['concepto','Concepto','text',1],['importe','Importe (€)','number'],['fecha','Fecha','date'],['recurrente','Frecuencia','select',0,[['unico','Único'],['mensual','Mensual'],['trimestral','Trimestral'],['anual','Anual']]],['pagado','¿Pagado?','check'],['notas','Notas','textarea']]},
+};
+let editF={table:null,id:null,preset:{}};
+function openForm(table,id,preset){
+  editF={table,id:id||null,preset:preset||{}};
+  const def=FORMS[table];const row=id?(cache[table]||[]).find(r=>r.id===id)||{}:{...editF.preset};
+  const html=def.fields.map(f=>{const[k,label,type,req,opts,ph]=f;let v=row[k];
+    if(type==='tags')v=arr(v).join(', ');
+    if(type==='check')return `<div class="fg"><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="f_${k}" ${v?'checked':''} style="width:auto"> ${label}</label></div>`;
+    if(type==='select')return `<div class="fg"><label>${label}</label><select id="f_${k}">${opts.map(o=>`<option value="${o[0]}" ${v===o[0]?'selected':''}>${o[1]}</option>`).join('')}</select></div>`;
+    if(type==='textarea')return `<div class="fg"><label>${label}</label><textarea id="f_${k}" placeholder="${ph||''}">${esc(v||'')}</textarea></div>`;
+    const t=type==='number'?'number':(type==='date'?'date':'text');
+    return `<div class="fg"><label>${label}</label><input type="${t}" id="f_${k}" value="${esc(v??'')}" placeholder="${ph||''}"></div>`;}).join('');
+  $('#modal').innerHTML=`<h3>${id?'✏️ Editar':'➕ Nuevo'} ${def.title.toLowerCase()}</h3>${html}
+  <div class="modal-actions">${id?`<button class="btn-del" onclick="delForm()">🗑 Borrar</button>`:''}
+  <button class="btn ghost" onclick="closeModal()">Cancelar</button><button class="btn" onclick="saveForm()">Guardar</button></div>`;
+  $('#overlay').classList.add('open');
+  if(table==='movimientos'){const imp=document.getElementById('f_importe'),tip=document.getElementById('f_tipo'),am=document.getElementById('f_amort'),an=document.getElementById('f_amort_anios');
+    const sync=()=>{if((parseFloat(imp.value)||0)>300&&tip.value==='gasto'){am.checked=true;if(!an.value)an.value=4;}};
+    imp.addEventListener('input',sync);tip.addEventListener('change',sync);}
+}
+async function saveForm(){const{table,id,preset}=editF;const def=FORMS[table];const row={...preset};
+  for(const f of def.fields){const[k,,type]=f;const el=document.getElementById('f_'+k);if(!el)continue;
+    if(type==='check')row[k]=el.checked;else if(type==='tags')row[k]=arr(el.value);else if(type==='number')row[k]=parseFloat(el.value)||0;else row[k]=el.value;}
+  if(def.fields.some(f=>f[3]&&!row[f[0]])){alert('Rellena los campos obligatorios.');return;}
+  if(id)await db.update(table,id,row);else await db.insert(table,row);
+  cache[table]=await db.list(table);migrate();updateCounts();closeModal();render();
+}
+async function delForm(){if(!confirm('¿Borrar esto?'))return;await db.remove(editF.table,editF.id);cache[editF.table]=await db.list(editF.table);migrate();updateCounts();closeModal();render();}
+function closeModal(){$('#overlay').classList.remove('open');}
+$('#overlay').addEventListener('click',e=>{if(e.target===$('#overlay'))closeModal();});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});
+document.addEventListener('keydown',e=>{
+  if(!editing||!$('#edBody')||$('#overlay').classList.contains('open'))return;
+  const mod=e.ctrlKey||e.metaKey;if(!mod)return;
+  if((e.key==='z'||e.key==='Z')&&!e.shiftKey){e.preventDefault();undoEditor();}
+  else if(((e.key==='z'||e.key==='Z')&&e.shiftKey)||e.key==='y'||e.key==='Y'){e.preventDefault();redoEditor();}
+});
+
+/* ============================================================
+   CONFIG
+   ============================================================ */
+function openConfig(){
+  $('#modal').innerHTML=`<h3>⚙️ Conexión a la nube (Supabase)</h3>
+  <p style="color:var(--mut);font-size:.83rem;line-height:1.6;margin-bottom:16px">Pega tus 2 claves de Supabase para guardar en la nube y sincronizar entre dispositivos. Guía: <code>SETUP_Supabase.md</code>.</p>
+  <div class="fg"><label>Project URL</label><input id="cfg_url" placeholder="https://xxxx.supabase.co" value="${esc(cfg.url||'')}"></div>
+  <div class="fg"><label>anon public key</label><input id="cfg_key" placeholder="eyJhbGci..." value="${esc(cfg.key||'')}"></div>
+  <div style="font-size:.78rem;color:var(--mut);background:#0d0d0f;border:1px solid var(--line);border-radius:9px;padding:10px 12px">Estado: <b style="color:${CLOUD?'var(--green)':'var(--orange)'}">${CLOUD?'☁️ Conectado a la nube':'💾 Modo local'}</b></div>
+  <div class="modal-actions">${CLOUD?'<button class="btn-del" onclick="disconnectCloud()">Desconectar</button>':''}<button class="btn ghost" onclick="closeModal()">Cancelar</button><button class="btn" onclick="saveConfig()">Conectar y guardar</button></div>`;
+  $('#overlay').classList.add('open');
+}
+async function saveConfig(){
+  cfg={url:$('#cfg_url').value.trim(),key:$('#cfg_key').value.trim()};localStorage.setItem(CFG_KEY,JSON.stringify(cfg));initSupabase();
+  if(CLOUD){const cloudIdeas=await db.list('ideas');const localIdeas=JSON.parse(localStorage.getItem('baseops_ideas')||'[]');
+    if(cloudIdeas.length===0&&localIdeas.length>0&&confirm('¿Subir a la nube los datos de este navegador? (recomendado la 1ª vez)')){
+      for(const t of TABLES){const local=JSON.parse(localStorage.getItem('baseops_'+t)||'[]');for(const r of local){const{id,created_at,...rest}=r;await sb.from(t).insert(rest);}}}}
+  await refreshAll();closeModal();render();
+}
+function disconnectCloud(){if(!confirm('Volver a modo local. Tus datos en la nube se mantienen. ¿Seguir?'))return;cfg={};localStorage.removeItem(CFG_KEY);initSupabase();refreshAll().then(()=>{closeModal();render();});}
+
+/* BOOT */
+(async function(){seedDemo();initSupabase();await refreshAll();render();})();
+</script>
+</body>
+</html>
