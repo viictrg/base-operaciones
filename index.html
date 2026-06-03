@@ -105,6 +105,19 @@
   .wrow:last-child{border-bottom:none}
   .wrow .r-title{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .empty{text-align:center;padding:60px 20px;color:var(--mut2);font-size:.88rem;grid-column:1/-1}
+  /* TO-DO */
+  .todo-add{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+  .todo-add input[type=text]{flex:1;min-width:180px;background:#0d0d0f;border:1px solid var(--line);border-radius:9px;padding:9px 12px;color:var(--txt);font-family:inherit;font-size:.86rem;outline:none}
+  .todo-add input[type=text]:focus{border-color:var(--acc)}
+  .todo-add input[type=date],.todo-add input[type=time],.todo-add select{color-scheme:dark}
+  .trow{display:flex;align-items:center;gap:11px;padding:10px 0;border-bottom:1px solid #1b1b21}
+  .trow:last-child{border-bottom:none}
+  .trow input[type=checkbox]{width:16px;height:16px;accent-color:var(--acc);cursor:pointer;flex-shrink:0}
+  .trow .ttext{flex:1;font-size:.9rem;min-width:0;line-height:1.4}
+  .trow.done .ttext{text-decoration:line-through;color:var(--mut2)}
+  .trow.done .dot{opacity:.4}
+  .trow-x{background:none;border:none;color:var(--mut2);cursor:pointer;font-size:.85rem;flex-shrink:0;padding:2px 4px}
+  .trow-x:hover{color:var(--red)}
 
   /* EDITOR (Notion-style) */
   .editor{max-width:820px}
@@ -194,7 +207,7 @@
 /* ============================================================
    DATA LAYER  (Supabase ó localStorage)
    ============================================================ */
-const TABLES=['ideas','recursos','miniaturas','referencias','movimientos','impuestos','pagos_proximos'];
+const TABLES=['ideas','recursos','miniaturas','referencias','movimientos','impuestos','pagos_proximos','tareas'];
 const CFG_KEY='baseops_cfg';
 // Conexión por defecto a tu proyecto Supabase (se conecta solo al abrir).
 // La publishable key está pensada para apps cliente; el acceso lo controla RLS.
@@ -332,25 +345,62 @@ function render(){
 /* ============================================================
    DASHBOARD
    ============================================================ */
+function renderTareas(){
+  const tareas=cache.tareas||[]; const today=todayISO();
+  const order={alta:0,media:1,baja:2};
+  const sorted=[...tareas].sort((a,b)=>{
+    if(!!a.hecha!==!!b.hecha)return a.hecha?1:-1;
+    const pa=order[a.prioridad]??1,pb=order[b.prioridad]??1; if(pa!==pb)return pa-pb;
+    return (a.fecha||'9999').localeCompare(b.fecha||'9999');
+  });
+  if(!sorted.length)return '<div style="color:var(--mut2);font-size:.85rem">Sin tareas todavía. Escribe una arriba y pulsa Añadir 👆</div>';
+  return sorted.map(t=>{
+    const hoy=t.fecha===today;
+    const tagTxt=t.fecha?((hoy?'Hoy':fdate(t.fecha))+(t.hora?' · '+t.hora:'')):'';
+    return `<div class="trow${t.hecha?' done':''}">
+      <input type="checkbox" ${t.hecha?'checked':''} onchange="toggleTarea('${t.id}')">
+      <span class="dot" style="margin:0;background:${PRI[t.prioridad]||PRI.media}"></span>
+      <span class="ttext">${esc(t.texto)}</span>
+      ${tagTxt?`<span class="tag" style="${hoy&&!t.hecha?'color:var(--orange);border:1px solid #f59e0b44':''}">${tagTxt}</span>`:''}
+      <button class="trow-x" onclick="delTarea('${t.id}')" title="Borrar">✕</button>
+    </div>`;
+  }).join('');
+}
+async function addTarea(){
+  const inp=$('#todoInput'); const texto=inp.value.trim(); if(!texto)return;
+  const row={texto,hecha:false,prioridad:($('#todoPri')||{}).value||'media',fecha:($('#todoDate')||{}).value||null,hora:($('#todoTime')||{}).value||null};
+  const r=await db.insert('tareas',row); if(r){cache.tareas=await db.list('tareas');renderDashboard();}
+}
+async function toggleTarea(id){const t=(cache.tareas||[]).find(x=>x.id===id);if(!t)return;const nv=!t.hecha;await db.update('tareas',id,{hecha:nv});t.hecha=nv;renderDashboard();}
+async function delTarea(id){await db.remove('tareas',id);cache.tareas=await db.list('tareas');renderDashboard();}
+
 function renderDashboard(){
   const ideas=cache.ideas||[];
   const act=ideas.filter(i=>i.estado!=='publicado');
   const prod=ideas.filter(i=>i.estado==='proceso'||i.estado==='grabado');
-  const mov=cache.movimientos||[];
-  const ingresos=mov.filter(m=>m.tipo==='ingreso'&&m.estado!=='pendiente'&&m.estado!=='previsto').reduce((s,m)=>s+Number(m.importe||0),0);
-  const gastos=mov.filter(m=>m.tipo==='gasto').reduce((s,m)=>s+Number(m.importe||0),0);
-  const pend=mov.filter(m=>m.tipo==='ingreso'&&m.estado==='pendiente').reduce((s,m)=>s+Number(m.importe||0),0);
-  const pagos=(cache.pagos_proximos||[]).filter(p=>!p.pagado);
-  const imp=(cache.impuestos||[]).filter(i=>!i.pagado);
   const prox=ideas.filter(i=>i.fecha_pub).sort((a,b)=>a.fecha_pub.localeCompare(b.fecha_pub)).slice(0,6);
+  const tareas=cache.tareas||[]; const today=todayISO();
+  const pendTareas=tareas.filter(t=>!t.hecha);
+  const hoyTareas=tareas.filter(t=>!t.hecha&&t.fecha===today);
   $('#main').innerHTML=`
-  <div class="pagehead"><div><h1>Hola, Víctor 👋</h1><p>Tu base de operaciones. Todo en un sitio.</p></div></div>
+  <div class="pagehead"><div><h1>Hola, Víctor 👋</h1><p>Tu día de un vistazo.</p></div></div>
   ${CLOUD?'':`<div class="banner">⚠️ Estás en <b>modo local</b>. Para que perdure y sincronice, conecta Supabase en <b>⚙️ Conexión</b>.</div>`}
   <div class="stats-row">
+    <div class="stat"><div class="lbl">✅ Tareas pendientes</div><div class="val">${pendTareas.length}</div></div>
+    <div class="stat"><div class="lbl">🔥 Para hoy</div><div class="val" style="color:var(--orange)">${hoyTareas.length}</div></div>
     <div class="stat"><div class="lbl">🎬 Reels activos</div><div class="val">${act.filter(i=>i.seccion==='reel').length}</div></div>
     <div class="stat"><div class="lbl">▶️ YouTube activos</div><div class="val">${act.filter(i=>i.seccion==='youtube').length}</div></div>
-    <div class="stat"><div class="lbl">💰 Balance</div><div class="val ${ingresos-gastos>=0?'pos':'neg'}">${eur(ingresos-gastos)}</div></div>
-    <div class="stat"><div class="lbl">⏳ Pendiente cobro</div><div class="val" style="color:var(--blue)">${eur(pend)}</div></div>
+  </div>
+  <div class="widget" style="margin-bottom:16px">
+    <h3>✅ To-Do · Tareas prioritarias</h3>
+    <div class="todo-add">
+      <input type="text" id="todoInput" placeholder="Nueva tarea… (ej. Reunión vídeo Mercedes)" onkeydown="if(event.key==='Enter')addTarea()">
+      <input type="date" id="todoDate" class="sel" title="Fecha (opcional)">
+      <input type="time" id="todoTime" class="sel" title="Hora (opcional)">
+      <select id="todoPri" class="sel"><option value="alta">🔴 Alta</option><option value="media" selected>🟡 Media</option><option value="baja">🟢 Baja</option></select>
+      <button class="btn sm" onclick="addTarea()">+ Añadir</button>
+    </div>
+    <div class="wlist">${renderTareas()}</div>
   </div>
   <div class="dash-grid">
     <div class="widget"><h3>🎬 En producción</h3><div class="wlist">
@@ -358,12 +408,6 @@ function renderDashboard(){
     </div></div>
     <div class="widget"><h3>📅 Próximas publicaciones</h3><div class="wlist">
       ${prox.length?prox.map(i=>`<div class="wrow"><span class="r-title">${esc(i.titulo)}</span><span class="tag">${fdate(i.fecha_pub)}</span></div>`).join(''):'<div style="color:var(--mut2);font-size:.84rem">Nada programado. Usa el calendario.</div>'}
-    </div></div>
-    <div class="widget"><h3>📌 Próximos pagos</h3><div class="wlist">
-      ${pagos.length?pagos.map(p=>`<div class="wrow"><span class="r-title">${esc(p.concepto)}</span><span class="num">${eur(p.importe)}</span><span class="tag">${p.recurrente}</span></div>`).join(''):'<div style="color:var(--mut2);font-size:.84rem">Sin pagos pendientes 🎉</div>'}
-    </div></div>
-    <div class="widget"><h3>🧾 Impuestos pendientes</h3><div class="wlist">
-      ${imp.length?imp.map(i=>`<div class="wrow"><span class="r-title">Modelo ${esc(i.modelo)} · ${esc(i.periodo)}</span><span class="tag">${fdate(i.fecha_limite)||'—'}</span></div>`).join(''):'<div style="color:var(--mut2);font-size:.84rem">Todo al día.</div>'}
     </div></div>
   </div>`;
 }
