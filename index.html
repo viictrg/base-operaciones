@@ -181,6 +181,9 @@
     <button onclick="openConfig()" style="display:flex;align-items:center;gap:11px;background:none;border:none;color:var(--mut);font-size:.82rem;padding:10px 12px;border-radius:10px;cursor:pointer;width:100%;font-family:inherit">
       <span class="ico">⚙️</span> Conexión <span class="sync-dot sync-local" id="syncDot"></span>
     </button>
+    <button onclick="logout()" style="display:flex;align-items:center;gap:11px;background:none;border:none;color:var(--mut);font-size:.82rem;padding:10px 12px;border-radius:10px;cursor:pointer;width:100%;font-family:inherit">
+      <span class="ico">🚪</span> Cerrar sesión
+    </button>
   </div>
 </aside>
 
@@ -197,6 +200,7 @@ const CFG_KEY='baseops_cfg';
 // La publishable key está pensada para apps cliente; el acceso lo controla RLS.
 const DEFAULT_CFG={url:'https://bibczdhlvyjrjturrwns.supabase.co',key:'sb_publishable_xOeLFbLHhggEWfv_UvX_vg_ktgBxTHp'};
 let cfg=JSON.parse(localStorage.getItem(CFG_KEY)||'null')||DEFAULT_CFG;
+const ALLOWED_EMAIL='victorapolomedia@gmail.com';  // solo esta cuenta puede entrar
 let sb=null, CLOUD=false, cache={};
 
 function initSupabase(){
@@ -734,8 +738,42 @@ async function saveConfig(){
 }
 function disconnectCloud(){if(!confirm('Volver a modo local. Tus datos en la nube se mantienen. ¿Seguir?'))return;cfg={};localStorage.removeItem(CFG_KEY);initSupabase();refreshAll().then(()=>{closeModal();render();});}
 
+/* ============================================================
+   AUTH (Google · Supabase)
+   ============================================================ */
+let authUser=null;
+function showLogin(msg){
+  const sb1=document.querySelector('.sidebar');if(sb1)sb1.style.display='none';
+  $('#main').style.maxWidth='none';
+  $('#main').innerHTML=`<div style="min-height:88vh;display:flex;align-items:center;justify-content:center">
+    <div style="text-align:center;max-width:360px;background:var(--card);border:1px solid #20202a;border-radius:18px;padding:40px 34px">
+      <div style="font-weight:900;font-size:1.4rem;letter-spacing:-.5px;line-height:1.1">BASE DE<br><span style="color:var(--acc)">OPERACIONES</span></div>
+      <div style="color:var(--mut);font-size:.82rem;margin:8px 0 26px">@victorapolo · acceso privado</div>
+      ${msg?`<div style="background:#2a1010;border:1px solid #7f1d1d;color:#fca5a5;font-size:.8rem;padding:9px 12px;border-radius:9px;margin-bottom:18px">${esc(msg)}</div>`:''}
+      <button class="btn" style="width:100%;display:flex;align-items:center;justify-content:center;gap:9px;padding:12px" onclick="loginGoogle()">
+        <svg width="16" height="16" viewBox="0 0 48 48"><g fill="#0a0a0b"><path d="M24 9.5c3.5 0 6.6 1.2 9 3.6l6.7-6.7C35.6 2.6 30.1 0 24 0 14.6 0 6.5 5.4 2.5 13.3l7.8 6.1C12.2 13.2 17.6 9.5 24 9.5z"/><path d="M46.1 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.4c-.5 2.9-2.1 5.3-4.5 7l7 5.4c4.1-3.8 6.7-9.4 6.7-16.9z"/><path d="M10.3 28.6c-.5-1.4-.7-2.9-.7-4.6s.3-3.2.7-4.6l-7.8-6.1C.9 16.5 0 20.1 0 24s.9 7.5 2.5 10.7l7.8-6.1z"/><path d="M24 48c6.1 0 11.3-2 15-5.5l-7-5.4c-2 1.3-4.5 2.1-8 2.1-6.4 0-11.8-3.7-13.7-8.9l-7.8 6.1C6.5 42.6 14.6 48 24 48z"/></g></svg>
+        Entrar con Google
+      </button>
+      <div style="color:var(--mut2);font-size:.72rem;margin-top:16px">Solo tu cuenta autorizada puede acceder.</div>
+    </div></div>`;
+}
+async function loginGoogle(){if(!sb)return;await sb.auth.signInWithOAuth({provider:'google',options:{redirectTo:location.href.split('#')[0].split('?')[0]}});}
+async function logout(){if(sb){try{await sb.auth.signOut();}catch(e){}}location.reload();}
+async function startApp(){const sb1=document.querySelector('.sidebar');if(sb1)sb1.style.display='';$('#main').style.maxWidth='';await refreshAll();render();}
+
 /* BOOT */
-(async function(){seedDemo();initSupabase();await refreshAll();render();})();
+(async function(){
+  seedDemo(); initSupabase();
+  if(CLOUD){
+    try{
+      const {data:{session}}=await sb.auth.getSession();
+      if(session&&session.user){
+        if((session.user.email||'').toLowerCase()===ALLOWED_EMAIL){authUser=session.user;await startApp();}
+        else{await sb.auth.signOut();showLogin('La cuenta '+session.user.email+' no tiene acceso.');}
+      } else showLogin();
+    }catch(e){showLogin();}
+  } else { await startApp(); }
+})();
 </script>
 </body>
 </html>
