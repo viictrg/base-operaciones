@@ -118,6 +118,17 @@
   .trow.done .dot{opacity:.4}
   .trow-x{background:none;border:none;color:var(--mut2);cursor:pointer;font-size:.85rem;flex-shrink:0;padding:2px 4px}
   .trow-x:hover{color:var(--red)}
+  /* VIEW TOGGLE + LISTA + DRAG */
+  .viewtoggle{display:flex;gap:2px;background:#161618;border:1px solid var(--line);border-radius:9px;padding:3px}
+  .viewtoggle button{background:none;border:none;color:var(--mut);font-size:.78rem;padding:5px 10px;border-radius:7px;cursor:pointer;font-family:inherit}
+  .viewtoggle button.active{background:#1e1e10;color:var(--acc);font-weight:600}
+  .idea-list{display:flex;flex-direction:column;gap:7px}
+  .idea-row{display:flex;align-items:center;gap:11px;background:var(--card);border:1px solid #20202a;border-radius:11px;padding:11px 14px;cursor:pointer;transition:.15s}
+  .idea-row:hover{border-color:#33333e}
+  .idea-row .ir-title{flex:1;min-width:0;font-size:.9rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .drag-grip{color:var(--mut2);cursor:grab;font-size:.9rem;flex-shrink:0}
+  .card[draggable="true"]{cursor:pointer}
+  .card.drag-over,.idea-row.drag-over{border-color:var(--acc);box-shadow:0 0 0 2px #e8ff3955}
 
   /* EDITOR (Notion-style) */
   .editor{max-width:820px}
@@ -176,10 +187,33 @@
   .banner b{color:var(--acc2)}
   code{background:#0d0d0f;border:1px solid var(--line);padding:1px 6px;border-radius:5px;font-size:.8rem}
   a{color:var(--acc)}
-  @media(max-width:760px){.sidebar{display:none}.main{padding:22px 16px}.cal-cell{min-height:70px}}
+  /* MOBILE NAV */
+  .mobile-top{display:none}
+  .nav-backdrop{display:none}
+  @media(max-width:760px){
+    .mobile-top{display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:60;background:var(--bg2);border-bottom:1px solid var(--line);padding:11px 14px}
+    .mt-burger{background:none;border:1px solid var(--line);color:var(--txt);font-size:1.15rem;border-radius:9px;width:40px;height:40px;cursor:pointer;flex-shrink:0}
+    .mt-title{font-weight:900;font-size:.95rem;letter-spacing:-.3px}
+    .mt-title b{color:var(--acc)}
+    .sidebar{position:fixed;top:0;left:0;z-index:70;height:100dvh;width:250px;transform:translateX(-100%);transition:transform .22s ease;box-shadow:0 0 50px rgba(0,0,0,.65)}
+    body.nav-open .sidebar{transform:translateX(0)}
+    .nav-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:65}
+    body.nav-open .nav-backdrop{display:block}
+    .main{padding:18px 14px;max-width:none}
+    .stats-row{grid-template-columns:repeat(2,1fr)}
+    .cal-cell{min-height:64px}
+    .pagehead h1{font-size:1.4rem}
+    .todo-add input[type=text]{min-width:120px}
+  }
 </style>
 </head>
 <body>
+
+<div class="mobile-top">
+  <button class="mt-burger" onclick="toggleNav()" aria-label="Menú">☰</button>
+  <span class="mt-title">BASE DE <b>OPERACIONES</b></span>
+</div>
+<div class="nav-backdrop" onclick="toggleNav()"></div>
 
 <aside class="sidebar">
   <div class="brand">BASE DE<br><b>OPERACIONES</b><small>@victorapolo</small></div>
@@ -315,7 +349,7 @@ function irpfEstimate(base){const b=Math.max(0,base);const tr=[[12450,.19],[2020
 
 const SECTIONS={
   reel:{label:'🎬 Reels',name:'Reels',tabs:['ideas','calendario','referencias'],
-    cats:{organico:['Orgánico','#f472b6'],colab:['Colaboración','#a78bfa'],tendencia:['Tendencia','#e8ff39']}},
+    cats:{organico:['Orgánico','#f472b6'],colaboracion:['Colaboración','#a78bfa']}},
   youtube:{label:'▶️ YouTube',name:'YouTube',tabs:['ideas','calendario','miniaturas','referencias'],
     cats:{tutorial:['Tutorial','#38bdf8'],lifestyle:['Lifestyle','#4ade80'],opinion:['Opinión','#f59e0b']}},
 };
@@ -329,12 +363,13 @@ function catName(sec,cat){const c=SECTIONS[sec].cats[cat];return c?c[0]:cat;}
 /* ============================================================
    NAV
    ============================================================ */
-let SEC='dashboard', subTab={reel:'ideas',youtube:'ideas'}, ideaFilter={reel:'all',youtube:'all'};
+let SEC='dashboard', subTab={reel:'ideas',youtube:'ideas'}, ideaFilter={reel:'all',youtube:'all'}, viewMode={reel:'paneles',youtube:'paneles'};
 document.getElementById('nav').addEventListener('click',e=>{
   const b=e.target.closest('button[data-sec]');if(!b)return;
   document.querySelectorAll('#nav button').forEach(x=>x.classList.remove('active'));b.classList.add('active');
-  SEC=b.dataset.sec;editing=null;render();
+  SEC=b.dataset.sec;editing=null;document.body.classList.remove('nav-open');render();
 });
+function toggleNav(){document.body.classList.toggle('nav-open');}
 function render(){
   if(SEC==='dashboard')return renderDashboard();
   if(SEC==='recursos')return renderRecursos();
@@ -432,22 +467,33 @@ function renderSection(sec){
   else if(tab==='miniaturas')renderMiniaturas();
 }
 
+const byOrden=(a,b)=>{const ao=(a.orden==null?1e9:a.orden),bo=(b.orden==null?1e9:b.orden);if(ao!==bo)return ao-bo;return (b.created_at||'').localeCompare(a.created_at||'');};
+let dragId=null;
 function renderIdeaList(sec){
-  const S=SECTIONS[sec],f=ideaFilter[sec];
-  const items=(cache.ideas||[]).filter(i=>i.seccion===sec&&(f==='all'||i.categoria===f));
+  const S=SECTIONS[sec],f=ideaFilter[sec],vm=viewMode[sec];
+  const items=(cache.ideas||[]).filter(i=>i.seccion===sec&&(f==='all'||i.categoria===f)).sort(byOrden);
   $('#secBody').innerHTML=`
-  <div class="filters">
-    <div class="chip ${f==='all'?'active':''}" onclick="ideaFilter['${sec}']='all';render()">Todas</div>
-    ${Object.entries(S.cats).map(([k,v])=>`<div class="chip ${f===k?'active':''}" onclick="ideaFilter['${sec}']='${k}';render()">${v[0]}</div>`).join('')}
+  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:18px">
+    <div class="filters" style="margin:0">
+      <div class="chip ${f==='all'?'active':''}" onclick="ideaFilter['${sec}']='all';render()">Todas</div>
+      ${Object.entries(S.cats).map(([k,v])=>`<div class="chip ${f===k?'active':''}" onclick="ideaFilter['${sec}']='${k}';render()">${v[0]}</div>`).join('')}
+    </div>
+    <div class="viewtoggle" style="margin-left:auto">
+      <button class="${vm==='paneles'?'active':''}" onclick="viewMode['${sec}']='paneles';render()" title="Paneles">▦ Paneles</button>
+      <button class="${vm==='lista'?'active':''}" onclick="viewMode['${sec}']='lista';render()" title="Lista">≣ Lista</button>
+    </div>
   </div>
-  <div class="grid">
-    ${items.length?items.map(i=>ideaCard(i,sec)).join(''):'<div class="empty">No hay ideas aquí. Crea la primera 👆</div>'}
-    <div class="add-card" onclick="newIdea('${sec}')">＋ Nueva idea</div>
-  </div>`;
+  <div style="font-size:.74rem;color:var(--mut2);margin-bottom:12px">✋ Arrastra para reordenar.</div>
+  ${vm==='lista'
+    ? `<div class="idea-list">${items.length?items.map(i=>ideaRow(i,sec)).join(''):'<div class="empty">No hay ideas aquí.</div>'}</div>
+       <div class="add-card" style="min-height:54px;margin-top:12px" onclick="newIdea('${sec}')">＋ Nueva idea</div>`
+    : `<div class="grid">${items.length?items.map(i=>ideaCard(i,sec)).join(''):'<div class="empty">No hay ideas aquí. Crea la primera 👆</div>'}
+       <div class="add-card" onclick="newIdea('${sec}')">＋ Nueva idea</div></div>`}`;
 }
+function dndAttrs(i,sec){return `draggable="true" ondragstart="dragId='${i.id}'" ondragover="event.preventDefault();this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')" ondrop="this.classList.remove('drag-over');reorderIdeas(dragId,'${i.id}','${sec}')"`;}
 function ideaCard(i,sec){
   const cc=catColor(sec,i.categoria);
-  return `<div class="card" onclick="openEditor('${i.id}')">
+  return `<div class="card" ${dndAttrs(i,sec)} onclick="openEditor('${i.id}')">
     <div class="card-top">${badge(catName(sec,i.categoria),cc)}
       <select class="sel" onclick="event.stopPropagation()" onchange="quickUpdate('${i.id}','estado',this.value)">
         ${Object.entries(EST).map(([k,v])=>`<option value="${k}" ${i.estado===k?'selected':''}>${v[0]}</option>`).join('')}
@@ -456,9 +502,35 @@ function ideaCard(i,sec){
     <div class="card-desc">${esc(i.descripcion||i.contenido||'')||'Sin descripción. Clica para abrir y escribir el guion.'}</div>
     <div class="card-foot">${arr(i.tags).slice(0,3).map(t=>`<span class="tag">${esc(t)}</span>`).join('')}
       ${i.contenido&&i.contenido.trim()?'<span class="has-script">📝 guion</span>':''}
-      <span class="dot" style="background:${PRI[i.prioridad]||PRI.media}"></span></div>
+      <span class="dot" style="margin-left:auto;background:${PRI[i.prioridad]||PRI.media}"></span>
+      <button class="trow-x" onclick="delIdeaQuick('${i.id}',event)" title="Borrar idea">🗑</button></div>
   </div>`;
 }
+function ideaRow(i,sec){
+  const cc=catColor(sec,i.categoria);
+  return `<div class="idea-row" ${dndAttrs(i,sec)} onclick="openEditor('${i.id}')">
+    <span class="drag-grip" title="Arrastra">⠿</span>
+    <span class="dot" style="margin:0;background:${PRI[i.prioridad]||PRI.media}"></span>
+    <span class="ir-title">${esc(i.titulo)||'Sin título'}${i.contenido&&i.contenido.trim()?' <span class="has-script">📝</span>':''}</span>
+    ${badge(catName(sec,i.categoria),cc)}
+    <select class="sel" onclick="event.stopPropagation()" onchange="quickUpdate('${i.id}','estado',this.value)">
+      ${Object.entries(EST).map(([k,v])=>`<option value="${k}" ${i.estado===k?'selected':''}>${v[0]}</option>`).join('')}
+    </select>
+    <button class="trow-x" onclick="delIdeaQuick('${i.id}',event)" title="Borrar idea">🗑</button>
+  </div>`;
+}
+async function reorderIdeas(dId,targetId,sec){
+  if(!dId||dId===targetId)return;
+  const list=(cache.ideas||[]).filter(i=>i.seccion===sec).sort(byOrden);
+  const from=list.findIndex(i=>i.id===dId),to=list.findIndex(i=>i.id===targetId);
+  if(from<0||to<0)return;
+  const [m]=list.splice(from,1);list.splice(to,0,m);
+  list.forEach((i,idx)=>{i.orden=idx;});
+  dragId=null;render();
+  for(const i of list){ if(CLOUD&&sb){sb.from('ideas').update({orden:i.orden}).eq('id',i.id);} else {db.update('ideas',i.id,{orden:i.orden});} }
+}
+async function delIdeaQuick(id,ev){ev.stopPropagation();if(!confirm('¿Borrar esta idea? No se puede deshacer.'))return;await db.remove('ideas',id);cache.ideas=await db.list('ideas');migrate();updateCounts();render();}
+async function delIdeaQuick(id,ev){ev.stopPropagation();if(!confirm('¿Borrar esta idea? No se puede deshacer.'))return;await db.remove('ideas',id);cache.ideas=await db.list('ideas');migrate();updateCounts();render();}
 
 /* ============================================================
    EDITOR (Notion-style, autosave)
@@ -788,6 +860,8 @@ function disconnectCloud(){if(!confirm('Volver a modo local. Tus datos en la nub
 let authUser=null;
 function showLogin(msg){
   const sb1=document.querySelector('.sidebar');if(sb1)sb1.style.display='none';
+  const mt=document.querySelector('.mobile-top');if(mt)mt.style.display='none';
+  document.body.classList.remove('nav-open');
   $('#main').style.maxWidth='none';
   $('#main').innerHTML=`<div style="min-height:88vh;display:flex;align-items:center;justify-content:center">
     <div style="text-align:center;max-width:360px;background:var(--card);border:1px solid #20202a;border-radius:18px;padding:40px 34px">
@@ -803,7 +877,7 @@ function showLogin(msg){
 }
 async function loginGoogle(){if(!sb)return;await sb.auth.signInWithOAuth({provider:'google',options:{redirectTo:location.href.split('#')[0].split('?')[0]}});}
 async function logout(){if(sb){try{await sb.auth.signOut();}catch(e){}}location.reload();}
-async function startApp(){const sb1=document.querySelector('.sidebar');if(sb1)sb1.style.display='';$('#main').style.maxWidth='';await refreshAll();render();}
+async function startApp(){const sb1=document.querySelector('.sidebar');if(sb1)sb1.style.display='';const mt=document.querySelector('.mobile-top');if(mt)mt.style.display='';$('#main').style.maxWidth='';await refreshAll();render();}
 
 /* BOOT */
 (async function(){
