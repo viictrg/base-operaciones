@@ -687,11 +687,23 @@ function renderMiniaturas(){
 /* ============================================================
    RECURSOS
    ============================================================ */
+function credParse(r){try{return JSON.parse(r.notas||'{}');}catch(e){return {};}}
+function diasHasta(dia){dia=Number(dia);if(!dia)return null;const n=new Date();const today=new Date(n.getFullYear(),n.getMonth(),n.getDate());let t=new Date(n.getFullYear(),n.getMonth(),dia);if(t<today)t=new Date(n.getFullYear(),n.getMonth()+1,dia);return Math.round((t-today)/86400000);}
 function renderRecursos(){
-  const items=cache.recursos||[];
+  const all=cache.recursos||[];
+  const creds=all.filter(r=>r.tipo==='credito');
+  const items=all.filter(r=>r.tipo!=='credito');
   $('#main').innerHTML=`
-  <div class="pagehead"><div><h1>🧰 Recursos</h1><p>Herramientas y links afiliados de todo lo que usas.</p></div>
+  <div class="pagehead"><div><h1>🧰 Recursos</h1><p>Herramientas, links afiliados y tus créditos de IA.</p></div>
     <button class="btn" onclick="openForm('recursos')">+ Nuevo recurso</button></div>
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:10px;flex-wrap:wrap">
+    <h3 style="font-size:.82rem;text-transform:uppercase;letter-spacing:.6px;color:var(--mut)">💳 Créditos IA</h3>
+    <button class="btn ghost sm" onclick="openCreditModal()">+ Cuenta de créditos</button>
+  </div>
+  <div class="stats-row" style="margin-bottom:28px">
+    ${creds.length?creds.slice().sort((a,b)=>{const da=diasHasta(credParse(a).dia),d2=diasHasta(credParse(b).dia);return (da==null?99:da)-(d2==null?99:d2);}).map(creditCard).join(''):'<div style="color:var(--mut2);font-size:.85rem">Sin cuentas de créditos. Añade una con el botón de arriba 👆</div>'}
+  </div>
+  <h3 style="font-size:.82rem;text-transform:uppercase;letter-spacing:.6px;color:var(--mut);margin-bottom:12px">🔗 Herramientas y links</h3>
   <div class="grid">
     ${items.length?items.map(r=>`<div class="card" onclick="openForm('recursos','${r.id}')"><div class="card-top">${badge(r.tipo||'link','#38bdf8')}</div>
       <div class="card-title">${r.url?`<a href="${esc(r.url)}" target="_blank" onclick="event.stopPropagation()">${esc(r.titulo)} ↗</a>`:esc(r.titulo)}</div>
@@ -700,6 +712,40 @@ function renderRecursos(){
     <div class="add-card" onclick="openForm('recursos')">＋ Nuevo recurso</div>
   </div>`;
 }
+function creditCard(r){
+  const c=credParse(r);const d=diasHasta(c.dia);const soon=d!=null&&d<=3;
+  const pc=c.plan==='gratis'?'#4ade80':(c.plan==='pago'?'#38bdf8':'#7a7a82');
+  return `<div class="stat" style="cursor:pointer;${soon?'border-color:var(--orange)':''}" onclick="openCreditModal('${r.id}')">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:6px">
+      <div style="font-size:.82rem;font-weight:700">${esc(r.titulo)}</div>${c.plan?badge(c.plan,pc):''}
+    </div>
+    <div class="val" style="font-size:1.25rem;margin-top:4px">${c.creditos?Number(c.creditos).toLocaleString('es-ES'):'—'}<span style="font-size:.68rem;color:var(--mut);font-weight:400"> créd/mes</span></div>
+    ${c.dia?`<div style="font-size:.76rem;margin-top:5px;color:${soon?'var(--orange)':'var(--mut)'};font-weight:${soon?'700':'400'}">${soon?'⚡ ':''}Renueva día ${c.dia} · ${d===0?'¡hoy!':('faltan '+d+' día'+(d===1?'':'s'))}</div>`:'<div style="font-size:.76rem;margin-top:5px;color:var(--mut)">Sin fecha de renovación</div>'}
+    ${c.nota?`<div style="font-size:.72rem;color:var(--mut2);margin-top:5px">${esc(c.nota)}</div>`:''}
+  </div>`;
+}
+function openCreditModal(id){
+  const r=id?(cache.recursos||[]).find(x=>x.id===id):null;const c=r?credParse(r):{};
+  $('#modal').innerHTML=`<h3>${id?'✏️ Editar':'➕ Nueva'} cuenta de créditos</h3>
+   <div class="fg"><label>Nombre (herramienta / cuenta)</label><input id="cr_n" value="${esc(r?r.titulo:'')}" placeholder="ej. OpenArt (pagada)"></div>
+   <div class="fg" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+     <div><label style="display:block;font-size:.76rem;color:var(--mut);margin-bottom:6px">Créditos / mes</label><input id="cr_c" type="number" value="${c.creditos==null?'':c.creditos}"></div>
+     <div><label style="display:block;font-size:.76rem;color:var(--mut);margin-bottom:6px">Día de renovación (1-31)</label><input id="cr_d" type="number" min="1" max="31" value="${c.dia==null?'':c.dia}"></div>
+   </div>
+   <div class="fg"><label>Plan</label><select id="cr_p"><option value="">—</option><option value="pago" ${c.plan==='pago'?'selected':''}>De pago</option><option value="gratis" ${c.plan==='gratis'?'selected':''}>Gratis</option></select></div>
+   <div class="fg"><label>Nota (opcional)</label><input id="cr_note" value="${esc(c.nota||'')}" placeholder="ej. infinito plan / créditos on-demand"></div>
+   <div class="modal-actions">${id?`<button class="btn-del" onclick="delCredito('${id}')">🗑 Borrar</button>`:''}
+     <button class="btn ghost" onclick="closeModal()">Cancelar</button><button class="btn" onclick="saveCredito('${id||''}')">Guardar</button></div>`;
+  $('#overlay').classList.add('open');
+}
+async function saveCredito(id){
+  const name=$('#cr_n').value.trim();if(!name){alert('Pon un nombre');return;}
+  const c={creditos:parseFloat($('#cr_c').value)||null,dia:parseInt($('#cr_d').value)||null,plan:$('#cr_p').value,nota:$('#cr_note').value.trim()};
+  const row={titulo:name,tipo:'credito',url:'',notas:JSON.stringify(c),tags:[]};
+  if(id)await db.update('recursos',id,row);else await db.insert('recursos',row);
+  cache.recursos=await db.list('recursos');updateCounts();closeModal();render();
+}
+async function delCredito(id){if(!confirm('¿Borrar esta cuenta de créditos?'))return;await db.remove('recursos',id);cache.recursos=await db.list('recursos');updateCounts();closeModal();render();}
 
 /* ============================================================
    FINANZAS
