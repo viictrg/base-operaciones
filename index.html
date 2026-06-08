@@ -96,6 +96,10 @@
   .stat{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
   .stat .lbl{font-size:.72rem;color:var(--mut);text-transform:uppercase;letter-spacing:.5px}
   .stat .val{font-size:1.5rem;font-weight:900;margin-top:6px;letter-spacing:-.5px}
+  .fin-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:13px;margin-bottom:24px}
+  .fin-stats .b2{grid-column:span 2}
+  .fin-stats .val.xl{font-size:2rem}
+  @media(max-width:860px){.fin-stats{grid-template-columns:repeat(2,1fr)}.fin-stats .b2{grid-column:span 2}}
   table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden}
   th{text-align:left;font-size:.7rem;text-transform:uppercase;letter-spacing:.5px;color:var(--mut);padding:11px 14px;border-bottom:1px solid var(--line);background:var(--inset)}
   td{padding:11px 14px;border-bottom:1px solid var(--line);font-size:.84rem}
@@ -813,19 +817,27 @@ function renderFinanzas(){
   const ing=mov.filter(m=>m.tipo==='ingreso'&&yOf(m.fecha)===yr);
   const gas=mov.filter(m=>m.tipo==='gasto'&&yOf(m.fecha)===yr);
   const cobrado=ing.filter(m=>m.estado==='cobrado').reduce((s,m)=>s+netoIng(m),0);
-  const pendiente=ing.filter(m=>m.estado==='pendiente').reduce((s,m)=>s+brutoIng(m),0);
-  const proy=ing.reduce((s,m)=>s+brutoIng(m),0);
+  const pendiente=ing.filter(m=>m.estado==='pendiente').reduce((s,m)=>s+netoIng(m),0);
+  const facturado=cobrado+pendiente;
+  const siTodo=ing.reduce((s,m)=>s+netoIng(m),0);
+  const gastosTotal=gas.reduce((s,m)=>s+totalGasto(m),0);
   const confirmados=ing.filter(m=>m.estado!=='propuesta');
   const reservaReal=reservaFor(confirmados,gas);
   const reservaProy=reservaFor(ing,gas);
   $('#main').innerHTML=`
   <div class="pagehead"><div><h1>💰 Finanzas</h1><p>Tu hoja de ingresos y gastos — impuestos calculados solos.</p></div>
     <div class="cal-head" style="margin:0"><button class="cal-nav" onclick="finYear--;renderFinanzas()">‹</button><h2 style="min-width:auto;font-size:1rem">${yr}</h2><button class="cal-nav" onclick="finYear++;renderFinanzas()">›</button></div></div>
-  <div class="stats-row">
+  <div class="fin-stats">
     <div class="stat"><div class="lbl">Cobrado (neto)</div><div class="val pos">${eur(cobrado)}</div></div>
-    <div class="stat"><div class="lbl">Pendiente de cobro</div><div class="val" style="color:var(--orange)">${eur(pendiente)}</div></div>
-    <div class="stat"><div class="lbl">🛡️ Reserva impuestos (cobrado + pendiente)</div><div class="val" style="color:var(--accInk)">${eur(reservaReal)}</div></div>
-    <div class="stat"><div class="lbl">📈 Reserva si todo se ejecuta</div><div class="val" style="color:var(--blue)">${eur(reservaProy)}</div></div>
+    <div class="stat"><div class="lbl">Pendiente de cobro (neto)</div><div class="val" style="color:var(--orange)">${eur(pendiente)}</div></div>
+    <div class="stat b2"><div class="lbl">📤 Gastos del periodo</div><div class="val xl neg">${eur(gastosTotal)}</div><div style="font-size:.72rem;color:var(--mut2);margin-top:4px">Se descuentan en el cálculo de impuestos</div></div>
+    <div class="stat b2"><div class="lbl">💼 Facturado · cobrado + pendiente</div><div class="val xl">${eur(facturado)}</div></div>
+    <div class="stat"><div class="lbl">📈 Si todo se ejecuta (neto)</div><div class="val" style="color:var(--blue)">${eur(siTodo)}</div></div>
+    <div class="stat"><div class="lbl">🛡️ Reserva impuestos</div>
+      <div style="display:flex;flex-direction:column;gap:4px;margin-top:7px;font-size:.85rem">
+        <div style="display:flex;justify-content:space-between;gap:8px"><span style="color:var(--mut)">Confirmado</span><span style="font-weight:800;color:var(--accInk)">${eur(reservaReal)}</span></div>
+        <div style="display:flex;justify-content:space-between;gap:8px"><span style="color:var(--mut)">Si todo</span><span style="font-weight:800;color:var(--blue)">${eur(reservaProy)}</span></div>
+      </div></div>
   </div>
   <div class="sub-tabs">
     <button class="${finTab==='ingresos'?'active':''}" onclick="finTab='ingresos';renderFinanzas()">📥 Ingresos</button>
