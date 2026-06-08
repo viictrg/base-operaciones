@@ -264,7 +264,8 @@
 <div class="mobile-top">
   <button class="mt-burger" onclick="toggleNav()" aria-label="Menú">☰</button>
   <span class="mt-title">BASE DE <b>OPERACIONES</b></span>
-  <button class="mt-theme" onclick="toggleTheme()" aria-label="Tema"><span class="theme-ico">🌙</span></button>
+  <button class="mt-theme" style="margin-left:auto" onclick="recargar()" aria-label="Recargar">⟳</button>
+  <button class="mt-theme" style="margin-left:6px" onclick="toggleTheme()" aria-label="Tema"><span class="theme-ico">🌙</span></button>
 </div>
 <div class="nav-backdrop" onclick="toggleNav()"></div>
 
@@ -278,6 +279,9 @@
     <button data-sec="finanzas"><span class="ico">💰</span> Finanzas</button>
   </nav>
   <div class="side-foot">
+    <button onclick="recargar()" style="display:flex;align-items:center;gap:11px;background:none;border:none;color:var(--mut);font-size:.82rem;padding:10px 12px;border-radius:10px;cursor:pointer;width:100%;font-family:inherit">
+      <span class="ico">🔄</span> Recargar / actualizar
+    </button>
     <button onclick="toggleTheme()" style="display:flex;align-items:center;gap:11px;background:none;border:none;color:var(--mut);font-size:.82rem;padding:10px 12px;border-radius:10px;cursor:pointer;width:100%;font-family:inherit">
       <span class="ico theme-ico">🌙</span> Tema claro / oscuro
     </button>
@@ -426,6 +430,7 @@ document.getElementById('nav').addEventListener('click',e=>{
   SEC=b.dataset.sec;editing=null;document.body.classList.remove('nav-open');render();
 });
 function toggleNav(){document.body.classList.toggle('nav-open');}
+function recargar(){const u=location.href.split('#')[0].split('?')[0];location.replace(u+'?r='+Date.now());}
 function updateThemeIco(){const l=document.documentElement.classList.contains('light');document.querySelectorAll('.theme-ico').forEach(e=>e.textContent=l?'☀️':'🌙');}
 function toggleTheme(){const l=document.documentElement.classList.toggle('light');try{localStorage.setItem('baseops_theme',l?'light':'dark');}catch(e){}updateThemeIco();}
 function applyTheme(){try{if(localStorage.getItem('baseops_theme')==='light')document.documentElement.classList.add('light');}catch(e){}updateThemeIco();}
