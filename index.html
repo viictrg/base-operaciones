@@ -211,22 +211,39 @@
   .mobile-top{display:none}
   .nav-backdrop{display:none}
   @media(max-width:860px){
-    .mobile-top{display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:60;background:var(--bg2);border-bottom:1px solid var(--line);padding:10px 14px}
-    .mt-burger{background:var(--inset);border:1px solid var(--line);color:var(--txt);font-size:1.1rem;border-radius:10px;width:40px;height:40px;cursor:pointer;flex-shrink:0}
-    .mt-title{font-weight:900;font-size:.95rem;letter-spacing:-.3px}
+    .mobile-top{display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:60;background:var(--bg2);border-bottom:1px solid var(--line);padding:9px 12px}
+    .mt-burger{background:var(--inset);border:1px solid var(--line);color:var(--txt);font-size:1.1rem;border-radius:10px;width:38px;height:38px;cursor:pointer;flex-shrink:0}
+    .mt-title{font-weight:900;font-size:.92rem;letter-spacing:-.3px}
     .mt-title b{color:var(--accInk)}
-    .mt-theme{margin-left:auto;background:var(--inset);border:1px solid var(--line);color:var(--txt);width:40px;height:40px;border-radius:10px;cursor:pointer;font-size:1rem;flex-shrink:0}
-    .sidebar{position:fixed;top:61px;left:0;right:0;width:auto;height:auto;max-height:calc(100dvh - 61px);overflow-y:auto;border-right:none;border-bottom:1px solid var(--line);border-radius:0 0 18px 18px;transform:translateY(-115%);transition:transform .24s ease;z-index:70;padding:10px 12px;box-shadow:var(--shadow)}
+    .mt-theme{margin-left:auto;background:var(--inset);border:1px solid var(--line);color:var(--txt);width:38px;height:38px;border-radius:10px;cursor:pointer;font-size:1rem;flex-shrink:0}
+    .sidebar{position:fixed;top:57px;left:0;right:0;width:auto;height:auto;max-height:calc(100dvh - 57px);overflow-y:auto;border-right:none;border-bottom:1px solid var(--line);border-radius:0 0 16px 16px;transform:translateY(-120%);transition:transform .24s ease;z-index:70;padding:8px 10px;box-shadow:var(--shadow)}
     body.nav-open .sidebar{transform:translateY(0)}
     .sidebar .brand{display:none}
-    .nav{margin-top:2px}
-    .nav-backdrop{position:fixed;inset:0;top:61px;background:rgba(0,0,0,.4);z-index:65}
+    .nav{margin-top:0}
+    .nav button{padding:11px 12px;font-size:.95rem}
+    .nav-backdrop{position:fixed;inset:0;top:57px;background:rgba(0,0,0,.4);z-index:65}
     body.nav-open .nav-backdrop{display:block}
-    .main{padding:18px 14px;max-width:none}
-    .stats-row{grid-template-columns:repeat(2,1fr)}
-    .cal-cell{min-height:64px}
-    .pagehead h1{font-size:1.4rem}
+    .main{padding:14px 12px;max-width:none}
+    .pagehead{margin-bottom:16px}
+    .pagehead h1{font-size:1.35rem}
+    .pagehead p{font-size:.8rem}
+    .stats-row,.fin-stats,.dash-grid{grid-template-columns:repeat(2,1fr);gap:10px}
+    .fin-stats .b2{grid-column:span 2}
+    .stat{padding:13px 14px}
+    .stat .val{font-size:1.25rem}
+    .fin-stats .val.xl{font-size:1.5rem}
+    .widget{padding:14px}
+    .cal-cell{min-height:58px}
+    .cal-chip{font-size:.62rem;padding:2px 5px}
+    th,td{padding:8px 9px;font-size:.8rem}
+    .fcell{font-size:.78rem;padding:4px 6px}
     .todo-add input[type=text]{min-width:120px}
+    .sub-tabs button{padding:9px 11px;font-size:.82rem}
+    .cal-wrap{grid-template-columns:1fr}
+  }
+  @media(max-width:520px){
+    .stats-row,.fin-stats,.dash-grid{grid-template-columns:1fr}
+    .fin-stats .b2{grid-column:span 1}
   }
 </style>
 </head>
