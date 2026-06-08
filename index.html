@@ -458,13 +458,42 @@ function renderDashboard(){
     </div>
     <div class="wlist">${renderTareas()}</div>
   </div>
+  ${renderDashCalHTML()}
   <div class="dash-grid">
     <div class="widget"><h3>🎬 En producción</h3><div class="wlist">
       ${prod.length?prod.map(i=>`<div class="wrow"><span class="dot" style="margin:0;background:${EST[i.estado][1]}"></span><span class="r-title">${esc(i.titulo)}</span>${badge(SECTIONS[i.seccion].name,catColor(i.seccion,i.categoria))}</div>`).join(''):'<div style="color:var(--mut2);font-size:.84rem">Nada en producción.</div>'}
     </div></div>
     <div class="widget"><h3>📅 Próximas publicaciones</h3><div class="wlist">
-      ${prox.length?prox.map(i=>`<div class="wrow"><span class="r-title">${esc(i.titulo)}</span><span class="tag">${fdate(i.fecha_pub)}</span></div>`).join(''):'<div style="color:var(--mut2);font-size:.84rem">Nada programado. Usa el calendario.</div>'}
+      ${prox.length?prox.map(i=>`<div class="wrow"><span class="r-title">${esc(i.titulo)}</span><span class="tag">${fdate(i.fecha_pub)}</span></div>`).join(''):'<div style="color:var(--mut2);font-size:.84rem">Nada programado.</div>'}
     </div></div>
+  </div>`;
+}
+let dashCal=new Date(); dashCal.setDate(1);
+function dashCalMove(n){dashCal.setMonth(dashCal.getMonth()+n);renderDashboard();}
+function dashCalToday(){dashCal=new Date();dashCal.setDate(1);renderDashboard();}
+async function addTareaOn(ds){const t=prompt('Nueva tarea para '+fdate(ds)+':');if(!t||!t.trim())return;await db.insert('tareas',{texto:t.trim(),hecha:false,prioridad:'media',fecha:ds,hora:null});cache.tareas=await db.list('tareas');renderDashboard();}
+function renderDashCalHTML(){
+  const y=dashCal.getFullYear(),m=dashCal.getMonth();
+  const monthName=dashCal.toLocaleDateString('es-ES',{month:'long',year:'numeric'});
+  const first=new Date(y,m,1);let start=(first.getDay()+6)%7;const dim=new Date(y,m+1,0).getDate();
+  const today=todayISO();
+  const tareas=cache.tareas||[],ideas=cache.ideas||[],creds=(cache.recursos||[]).filter(r=>r.tipo==='credito');
+  const dows=['L','M','X','J','V','S','D'];
+  let cells='';
+  for(let k=0;k<start;k++)cells+='<div class="cal-cell other"></div>';
+  for(let d=1;d<=dim;d++){
+    const ds=ymd(y,m,d);let chips='';
+    ideas.filter(i=>i.fecha_pub===ds).forEach(i=>{const c=catColor(i.seccion,i.categoria);chips+=`<div class="cal-chip" onclick="event.stopPropagation();openEditor('${i.id}')" style="background:${c}22;border-color:${c};color:${c}" title="${esc(i.titulo)}">${esc(i.titulo)}</div>`;});
+    tareas.filter(t=>t.fecha===ds).forEach(t=>{chips+=`<div class="cal-chip" onclick="event.stopPropagation();toggleTarea('${t.id}')" style="background:var(--accbg);border-color:var(--accbd);color:var(--accInk);${t.hecha?'text-decoration:line-through;opacity:.55':''}" title="${esc(t.texto)}">${t.hora?esc(t.hora)+' ':''}${esc(t.texto)}</div>`;});
+    creds.filter(r=>credParse(r).dia===d).forEach(r=>{chips+=`<div class="cal-chip" style="background:var(--inset);border-color:var(--mut2);color:var(--mut);cursor:default" title="Renueva créditos">💳 ${esc(r.titulo)}</div>`;});
+    cells+=`<div class="cal-cell ${ds===today?'today':''}" onclick="addTareaOn('${ds}')" title="Clic para añadir tarea"><div class="cal-daynum">${d}</div>${chips}</div>`;
+  }
+  return `<div class="widget" style="margin-bottom:16px">
+    <div class="cal-head"><h3 style="margin:0;text-transform:capitalize;color:var(--txt);font-size:1rem;letter-spacing:0">${monthName}</h3>
+      <button class="cal-nav" onclick="dashCalMove(-1)">‹</button><button class="cal-nav" onclick="dashCalMove(1)">›</button>
+      <button class="btn ghost sm" onclick="dashCalToday()">Hoy</button>
+      <span style="margin-left:auto;font-size:.72rem;color:var(--mut2)">Clic en un día para añadir tarea</span></div>
+    <div class="cal-grid" style="margin-top:12px">${dows.map(x=>`<div class="cal-dow">${x}</div>`).join('')}${cells}</div>
   </div>`;
 }
 
