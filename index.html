@@ -415,6 +415,13 @@ const PRI={alta:'#f87171',media:'#f59e0b',baja:'#4ade80'};
 const TABNAME={ideas:'📋 Ideas',calendario:'📅 Calendario',referencias:'🎬 Referencias',miniaturas:'🖼️ Miniaturas'};
 function badge(t,c){return `<span class="badge" style="background:${c}22;color:${c};border:1px solid ${c}44">${t}</span>`;}
 function catColor(sec,cat){const c=SECTIONS[sec].cats[cat];return c?c[1]:'#7a7a82';}
+function eventColor(txt){const t=(txt||'').toLowerCase();
+  if(/invideo|colab|agent\s*one/.test(t))return '#38bdf8';            // colaboración → azul
+  if(/youtube|yt\b|video\s*yt|tutorial/.test(t))return '#f87171';      // YouTube → rojo
+  if(/rodaje|mercedes|turkish|turquish|turqu|estambul|oppo|bilbao|grabaci|shooting|cliente/.test(t))return '#4ade80'; // rodaje/cliente → verde
+  if(/reel|org[aá]nico/.test(t))return '#f1d23a';                      // reel orgánico → amarillo
+  return '#8a929c';                                                    // otros → gris
+}
 function catName(sec,cat){const c=SECTIONS[sec].cats[cat];return c?c[0]:cat;}
 
 /* ============================================================
@@ -505,7 +512,7 @@ function renderDashboard(){
   </div>
   <div class="widget" style="margin-bottom:16px">
     <h3>📅 Agenda · próximos eventos (de tu calendario Apple)</h3>
-    <div class="wlist">${eventos.filter(e=>e.fecha>=today).sort((a,b)=>a.fecha.localeCompare(b.fecha)).slice(0,8).map(e=>`<div class="wrow"><span class="r-title">${esc(e.texto)}</span><span class="tag" style="${e.fecha===today?'color:var(--orange);border:1px solid #f59e0b44':''}">${e.fecha===today?'Hoy':fdate(e.fecha)}${e.hora?' · '+esc(e.hora):''}</span></div>`).join('')||'<div style="color:var(--mut2);font-size:.84rem">Sin eventos próximos en tu calendario.</div>'}</div>
+    <div class="wlist">${(()=>{const g={};eventos.forEach(e=>{const k=e.texto;if(!g[k])g[k]={texto:e.texto,min:e.fecha,max:e.fecha};if(e.fecha<g[k].min)g[k].min=e.fecha;if(e.fecha>g[k].max)g[k].max=e.fecha;});const ag=Object.values(g).filter(e=>e.max>=today).sort((a,b)=>a.min.localeCompare(b.min)).slice(0,8);return ag.map(e=>{const col=eventColor(e.texto);const lbl=e.min===e.max?(e.min===today?'Hoy':fdate(e.min)):fdate(e.min)+' – '+fdate(e.max);return `<div class="wrow"><span class="dot" style="margin:0;background:${col}"></span><span class="r-title">${esc(e.texto)}</span><span class="tag" style="${e.min===today?'color:var(--orange);border:1px solid #f59e0b44':''}">${lbl}</span></div>`;}).join('')||'<div style="color:var(--mut2);font-size:.84rem">Sin eventos próximos en tu calendario.</div>';})()}</div>
   </div>
   ${renderDashCalHTML()}
   <div class="dash-grid">
@@ -534,8 +541,8 @@ function renderDashCalHTML(){
     const ds=ymd(y,m,d);let chips='';
     ideas.filter(i=>i.fecha_pub===ds).forEach(i=>{const c=catColor(i.seccion,i.categoria);chips+=`<div class="cal-chip" onclick="event.stopPropagation();openEditor('${i.id}')" style="background:${c}22;border-color:${c};color:${c}" title="${esc(i.titulo)}">${esc(i.titulo)}</div>`;});
     tareas.filter(t=>t.fecha===ds).forEach(t=>{
-      if(t.prioridad==='evento'){chips+=`<div class="cal-chip" onclick="event.stopPropagation()" style="background:rgba(56,189,248,.15);border-color:#38bdf8;color:#38bdf8" title="${esc(t.texto)}">${t.hora?esc(t.hora)+' ':''}${esc(t.texto)}</div>`;}
-      else{chips+=`<div class="cal-chip" onclick="event.stopPropagation();toggleTarea('${t.id}')" style="background:var(--accbg);border-color:var(--accbd);color:var(--accInk);${t.hecha?'text-decoration:line-through;opacity:.55':''}" title="${esc(t.texto)}">${t.hora?esc(t.hora)+' ':''}${esc(t.texto)}</div>`;}
+      if(t.prioridad==='evento'){const ec=eventColor(t.texto);chips+=`<div class="cal-chip" onclick="event.stopPropagation()" style="background:${ec}26;border-color:${ec};color:${ec}" title="${esc(t.texto)}">${esc(t.texto)}</div>`;}
+      else{chips+=`<div class="cal-chip" onclick="event.stopPropagation();toggleTarea('${t.id}')" style="background:var(--accbg);border-color:var(--accbd);color:var(--accInk);${t.hecha?'text-decoration:line-through;opacity:.55':''}" title="${esc(t.texto)}">${esc(t.texto)}</div>`;}
     });
     creds.filter(r=>credParse(r).dia===d).forEach(r=>{chips+=`<div class="cal-chip" style="background:var(--inset);border-color:var(--mut2);color:var(--mut);cursor:default" title="Renueva créditos">💳 ${esc(r.titulo)}</div>`;});
     cells+=`<div class="cal-cell ${ds===today?'today':''}" onclick="addTareaOn('${ds}')" title="Clic para añadir tarea"><div class="cal-daynum">${d}</div>${chips}</div>`;
