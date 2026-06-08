@@ -16,6 +16,7 @@
     --accbg:rgba(220,255,52,.13); --accbd:rgba(220,255,52,.42);
     --blue:#38bdf8; --green:#4ade80; --orange:#f59e0b; --red:#f87171; --pink:#f472b6; --purp:#a78bfa;
     --shadow:0 12px 34px rgba(0,0,0,.45); --shadow-sm:0 1px 2px rgba(0,0,0,.22);
+    --row-ok:rgba(74,222,128,.10); --row-wait:rgba(245,158,11,.12);
     --radius:14px; color-scheme:dark;
   }
   html.light{
@@ -24,6 +25,7 @@
     --acc:#c7e600; --acc-h:#d4f200; --accInk:#566800; --btn-ink:#15181d;
     --accbg:rgba(150,190,0,.16); --accbd:rgba(150,190,0,.55);
     --shadow:0 10px 30px rgba(20,30,55,.10); --shadow-sm:0 1px 2px rgba(16,24,40,.07);
+    --row-ok:rgba(46,170,85,.13); --row-wait:rgba(225,165,20,.16);
     color-scheme:light;
   }
   *{margin:0;padding:0;box-sizing:border-box}
@@ -104,10 +106,12 @@
   .fin-stats .val.xl{font-size:2rem}
   @media(max-width:860px){.fin-stats{grid-template-columns:repeat(2,1fr)}.fin-stats .b2{grid-column:span 2}}
   table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden}
-  th{text-align:left;font-size:.7rem;text-transform:uppercase;letter-spacing:.5px;color:var(--mut);padding:11px 14px;border-bottom:1px solid var(--line);background:var(--inset)}
-  td{padding:11px 14px;border-bottom:1px solid var(--line);font-size:.84rem}
+  th{text-align:left;font-size:.68rem;text-transform:uppercase;letter-spacing:.5px;color:var(--mut);padding:6px 10px;border-bottom:1px solid var(--line);background:var(--inset)}
+  td{padding:4px 10px;border-bottom:1px solid var(--line);font-size:.82rem}
   tr:last-child td{border-bottom:none}
   tr:hover td{background:var(--hover)}
+  tr.row-cobrado td{background:var(--row-ok)}
+  tr.row-pendiente td{background:var(--row-wait)}
   .pill{font-size:.68rem;padding:2px 9px;border-radius:20px;font-weight:600}
   .num{font-variant-numeric:tabular-nums;font-weight:700;text-align:right;white-space:nowrap}
   .pos{color:var(--green)} .neg{color:var(--red)}
@@ -137,7 +141,7 @@
   .trow-x{background:none;border:none;color:var(--mut2);cursor:pointer;font-size:.85rem;flex-shrink:0;padding:2px 4px}
   .trow-x:hover{color:var(--red)}
   /* CELDAS EDITABLES (Finanzas estilo Excel) */
-  .fcell{background:var(--inset);border:1px solid var(--line);border-radius:7px;padding:5px 8px;color:var(--txt);font-family:inherit;font-size:.82rem;outline:none;max-width:100%}
+  .fcell{background:var(--inset);border:1px solid var(--line);border-radius:6px;padding:3px 7px;color:var(--txt);font-family:inherit;font-size:.8rem;outline:none;max-width:100%}
   .fcell:focus{border-color:var(--acc)}
   td .fcell[type=number]{text-align:right}
   tfoot td{padding:11px 14px;border-top:2px solid var(--line);font-size:.85rem}
@@ -887,7 +891,7 @@ function renderIngresos(ing){
   <div style="overflow-x:auto"><table style="min-width:900px"><thead><tr>
     <th>Factura</th><th>Concepto</th><th>Fecha</th><th>Trim</th><th class="num">Subtotal</th><th class="num">IVA %</th><th>IRPF 15%</th><th class="num">Bruto</th><th class="num">Neto</th><th>Estado</th><th></th>
   </tr></thead><tbody>
-  ${ing.length?ing.map(m=>{const me=mMeta(m);return `<tr>
+  ${ing.length?ing.map(m=>{const me=mMeta(m);return `<tr class="row-${m.estado}">
     <td>${fInput(m.id,'factura',me.factura||'','text',64)}</td>
     <td>${fInput(m.id,'concepto',m.concepto||'','text',180)}</td>
     <td>${fInput(m.id,'fecha',m.fecha||'','date',125)}</td>
