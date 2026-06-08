@@ -227,6 +227,7 @@
     .nav-backdrop{position:fixed;inset:0;top:57px;background:rgba(0,0,0,.4);z-index:65}
     body.nav-open .nav-backdrop{display:block}
     body{display:block}
+    .hide-mobile{display:none!important}
     .main{padding:14px 12px;max-width:none;width:100%}
     .pagehead{margin-bottom:16px}
     .pagehead h1{font-size:1.35rem}
@@ -518,7 +519,7 @@ function renderDashCalHTML(){
     creds.filter(r=>credParse(r).dia===d).forEach(r=>{chips+=`<div class="cal-chip" style="background:var(--inset);border-color:var(--mut2);color:var(--mut);cursor:default" title="Renueva créditos">💳 ${esc(r.titulo)}</div>`;});
     cells+=`<div class="cal-cell ${ds===today?'today':''}" onclick="addTareaOn('${ds}')" title="Clic para añadir tarea"><div class="cal-daynum">${d}</div>${chips}</div>`;
   }
-  return `<div class="widget" style="margin-bottom:16px">
+  return `<div class="widget hide-mobile" style="margin-bottom:16px">
     <div class="cal-head"><h3 style="margin:0;text-transform:capitalize;color:var(--txt);font-size:1rem;letter-spacing:0">${monthName}</h3>
       <button class="cal-nav" onclick="dashCalMove(-1)">‹</button><button class="cal-nav" onclick="dashCalMove(1)">›</button>
       <button class="btn ghost sm" onclick="dashCalToday()">Hoy</button>
