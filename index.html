@@ -129,6 +129,11 @@
   .trow.done .dot{opacity:.4}
   .trow-x{background:none;border:none;color:var(--mut2);cursor:pointer;font-size:.85rem;flex-shrink:0;padding:2px 4px}
   .trow-x:hover{color:var(--red)}
+  /* CELDAS EDITABLES (Finanzas estilo Excel) */
+  .fcell{background:var(--inset);border:1px solid var(--line);border-radius:7px;padding:5px 8px;color:var(--txt);font-family:inherit;font-size:.82rem;outline:none;max-width:100%}
+  .fcell:focus{border-color:var(--acc)}
+  td .fcell[type=number]{text-align:right}
+  tfoot td{padding:11px 14px;border-top:2px solid var(--line);font-size:.85rem}
   /* VIEW TOGGLE + LISTA + DRAG */
   .viewtoggle{display:flex;gap:2px;background:var(--inset);border:1px solid var(--line);border-radius:9px;padding:3px}
   .viewtoggle button{background:none;border:none;color:var(--mut);font-size:.78rem;padding:5px 10px;border-radius:7px;cursor:pointer;font-family:inherit}
@@ -779,34 +784,143 @@ async function delCredito(id){if(!confirm('¿Borrar esta cuenta de créditos?'))
 /* ============================================================
    FINANZAS
    ============================================================ */
-let finTab='movimientos';
+let finTab='ingresos', finYear=new Date().getFullYear();
+function mMeta(m){try{const o=JSON.parse(m.notas||'{}');return (o&&typeof o==='object')?o:{};}catch(e){return {};}}
+function irpfAmt(m){return mMeta(m).irpf?(Number(m.importe)||0)*0.15:0;}
+function brutoIng(m){return (Number(m.importe)||0)+ivaOf(m)-irpfAmt(m);}
+function netoIng(m){return (Number(m.importe)||0)-irpfAmt(m);}
+function totalGasto(m){return (Number(m.importe)||0)+ivaOf(m);}
+function fInput(id,field,val,type,w){const v=(val==null?'':esc(val));return `<input class="fcell" type="${type}" value="${v}" style="width:${w}px" onchange="finSet('${id}','${field}',this.value)">`;}
+async function finSet(id,field,value){
+  const m=(cache.movimientos||[]).find(x=>x.id===id);if(!m)return;
+  if(['importe','iva','amort_anios'].includes(field))value=parseFloat(value)||0;
+  if(['factura','irpf','nota'].includes(field)){const me=mMeta(m);me[field]=value;m.notas=JSON.stringify(me);await db.update('movimientos',id,{notas:m.notas});}
+  else{m[field]=value;await db.update('movimientos',id,{[field]:value});}
+  renderFinanzas();
+}
+async function finAdd(tipo){const r=await db.insert('movimientos',{tipo,concepto:'',importe:0,iva:tipo==='ingreso'?0:21,fecha:todayISO(),estado:tipo==='ingreso'?'cobrado':'pagado',categoria:tipo==='ingreso'?'cliente':'general',amort:false,amort_anios:4,cliente:'',notas:'{}'});if(r){cache.movimientos=await db.list('movimientos');renderFinanzas();}}
+async function finDel(id){if(!confirm('¿Borrar esta fila?'))return;await db.remove('movimientos',id);cache.movimientos=await db.list('movimientos');renderFinanzas();}
 function renderFinanzas(){
-  const mov=cache.movimientos||[];
-  const ingresos=mov.filter(m=>m.tipo==='ingreso'&&m.estado!=='pendiente'&&m.estado!=='previsto').reduce((s,m)=>s+Number(m.importe||0),0);
-  const gastos=mov.filter(m=>m.tipo==='gasto').reduce((s,m)=>s+Number(m.importe||0),0);
-  const pend=mov.filter(m=>m.tipo==='ingreso'&&m.estado==='pendiente').reduce((s,m)=>s+Number(m.importe||0),0);
-  const reserva=Math.round(ingresos*0.20);
+  const mov=cache.movimientos||[];const yr=finYear;
+  const ing=mov.filter(m=>m.tipo==='ingreso'&&yOf(m.fecha)===yr);
+  const gas=mov.filter(m=>m.tipo==='gasto'&&yOf(m.fecha)===yr);
+  const cobrado=ing.filter(m=>m.estado==='cobrado').reduce((s,m)=>s+netoIng(m),0);
+  const pendiente=ing.filter(m=>m.estado==='pendiente').reduce((s,m)=>s+brutoIng(m),0);
+  const proy=ing.reduce((s,m)=>s+brutoIng(m),0);
+  const ivaRep=ing.reduce((s,m)=>s+ivaOf(m),0), ivaSop=gas.reduce((s,m)=>s+ivaOf(m),0);
+  const baseIng=ing.reduce((s,m)=>s+(Number(m.importe)||0),0);
+  const baseGas=gas.filter(m=>!m.amort).reduce((s,m)=>s+(Number(m.importe)||0),0);
+  const amortYr=gas.filter(m=>m.amort).reduce((s,m)=>s+amortAnual(m),0);
+  const reten=ing.reduce((s,m)=>s+irpfAmt(m),0);
+  const reserva=Math.max(0,ivaRep-ivaSop)+Math.max(0,(baseIng-baseGas-amortYr)*0.20-reten);
   $('#main').innerHTML=`
-  <div class="pagehead"><div><h1>💰 Finanzas</h1><p>Control de autónomo: ingresos, gastos, impuestos y pagos.</p></div></div>
+  <div class="pagehead"><div><h1>💰 Finanzas</h1><p>Tu hoja de ingresos y gastos — impuestos calculados solos.</p></div>
+    <div class="cal-head" style="margin:0"><button class="cal-nav" onclick="finYear--;renderFinanzas()">‹</button><h2 style="min-width:auto;font-size:1rem">${yr}</h2><button class="cal-nav" onclick="finYear++;renderFinanzas()">›</button></div></div>
   <div class="stats-row">
-    <div class="stat"><div class="lbl">Ingresos cobrados</div><div class="val pos">${eur(ingresos)}</div></div>
-    <div class="stat"><div class="lbl">Gastos</div><div class="val neg">${eur(gastos)}</div></div>
-    <div class="stat"><div class="lbl">Balance</div><div class="val ${ingresos-gastos>=0?'pos':'neg'}">${eur(ingresos-gastos)}</div></div>
-    <div class="stat"><div class="lbl">Pendiente cobro</div><div class="val" style="color:var(--blue)">${eur(pend)}</div></div>
-    <div class="stat"><div class="lbl">Reserva impuestos (~20%)</div><div class="val" style="color:var(--orange)">${eur(reserva)}</div></div>
+    <div class="stat"><div class="lbl">Cobrado (neto)</div><div class="val pos">${eur(cobrado)}</div></div>
+    <div class="stat"><div class="lbl">Pendiente de cobro</div><div class="val" style="color:var(--orange)">${eur(pendiente)}</div></div>
+    <div class="stat"><div class="lbl">Si todo se ejecuta</div><div class="val" style="color:var(--blue)">${eur(proy)}</div></div>
+    <div class="stat"><div class="lbl">Reserva impuestos</div><div class="val" style="color:var(--accInk)">${eur(reserva)}</div></div>
   </div>
   <div class="sub-tabs">
-    <button class="${finTab==='movimientos'?'active':''}" onclick="finTab='movimientos';renderFinanzas()">Movimientos</button>
-    <button class="${finTab==='amortizaciones'?'active':''}" onclick="finTab='amortizaciones';renderFinanzas()">📷 Amortizaciones</button>
-    <button class="${finTab==='fiscal'?'active':''}" onclick="finTab='fiscal';renderFinanzas()">🧮 Resumen fiscal</button>
-    <button class="${finTab==='impuestos'?'active':''}" onclick="finTab='impuestos';renderFinanzas()">Impuestos</button>
-    <button class="${finTab==='pagos'?'active':''}" onclick="finTab='pagos';renderFinanzas()">Próximos pagos</button>
+    <button class="${finTab==='ingresos'?'active':''}" onclick="finTab='ingresos';renderFinanzas()">📥 Ingresos</button>
+    <button class="${finTab==='gastos'?'active':''}" onclick="finTab='gastos';renderFinanzas()">📤 Gastos</button>
+    <button class="${finTab==='resumen'?'active':''}" onclick="finTab='resumen';renderFinanzas()">🧮 Resumen fiscal</button>
+    <button class="${finTab==='pagos'?'active':''}" onclick="finTab='pagos';renderFinanzas()">📌 Próximos pagos</button>
   </div><div id="finBody"></div>`;
-  if(finTab==='movimientos')renderMovTable();
-  else if(finTab==='amortizaciones')renderAmortTable();
-  else if(finTab==='fiscal')renderFiscal();
-  else if(finTab==='impuestos')renderImpTable();
+  if(finTab==='ingresos')renderIngresos(ing);
+  else if(finTab==='gastos')renderGastos(gas);
+  else if(finTab==='resumen')renderResumen();
   else renderPagosTable();
+}
+function renderIngresos(ing){
+  ing=ing.slice().sort((a,b)=>(a.fecha||'').localeCompare(b.fecha||''));
+  const tot=f=>ing.reduce((s,m)=>s+f(m),0);
+  $('#finBody').innerHTML=`
+  <div style="margin-bottom:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+    <button class="btn sm" onclick="finAdd('ingreso')">+ Ingreso</button>
+    <span style="font-size:.74rem;color:var(--mut2)">Edita cualquier celda. Subtotal = base sin IVA · IRPF 15% = retención del cliente · Bruto/Neto se calculan solos.</span>
+  </div>
+  <div style="overflow-x:auto"><table style="min-width:900px"><thead><tr>
+    <th>Factura</th><th>Concepto</th><th>Fecha</th><th>Trim</th><th class="num">Subtotal</th><th class="num">IVA %</th><th>IRPF 15%</th><th class="num">Bruto</th><th class="num">Neto</th><th>Estado</th><th></th>
+  </tr></thead><tbody>
+  ${ing.length?ing.map(m=>{const me=mMeta(m);return `<tr>
+    <td>${fInput(m.id,'factura',me.factura||'','text',64)}</td>
+    <td>${fInput(m.id,'concepto',m.concepto||'','text',180)}</td>
+    <td>${fInput(m.id,'fecha',m.fecha||'','date',125)}</td>
+    <td style="color:var(--mut)">${m.fecha?'T'+qOf(m.fecha):'—'}</td>
+    <td class="num">${fInput(m.id,'importe',m.importe||0,'number',88)}</td>
+    <td class="num">${fInput(m.id,'iva',m.iva==null?0:m.iva,'number',56)}</td>
+    <td style="text-align:center"><input type="checkbox" ${me.irpf?'checked':''} onchange="finSet('${m.id}','irpf',this.checked)"></td>
+    <td class="num">${eur(brutoIng(m))}</td>
+    <td class="num pos">${eur(netoIng(m))}</td>
+    <td><select class="fcell" onchange="finSet('${m.id}','estado',this.value)">${[['cobrado','✅ Cobrado'],['pendiente','⏳ Pendiente'],['propuesta','💡 Propuesta']].map(o=>`<option value="${o[0]}" ${m.estado===o[0]?'selected':''}>${o[1]}</option>`).join('')}</select></td>
+    <td><button class="trow-x" onclick="finDel('${m.id}')">🗑</button></td>
+  </tr>`;}).join(''):'<tr><td colspan="11" style="text-align:center;color:var(--mut2);padding:30px">Sin ingresos en '+finYear+'. Añade el primero 👆</td></tr>'}
+  </tbody>
+  ${ing.length?`<tfoot><tr><td colspan="4"><b>TOTAL · ${ing.length} facturas</b></td><td class="num"><b>${eur(tot(m=>Number(m.importe)||0))}</b></td><td colspan="2"></td><td class="num"><b>${eur(tot(brutoIng))}</b></td><td class="num pos"><b>${eur(tot(netoIng))}</b></td><td colspan="2"></td></tr></tfoot>`:''}
+  </table></div>`;
+}
+function renderGastos(gas){
+  gas=gas.slice().sort((a,b)=>(a.fecha||'').localeCompare(b.fecha||''));
+  const tot=f=>gas.reduce((s,m)=>s+f(m),0);
+  $('#finBody').innerHTML=`
+  <div style="margin-bottom:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+    <button class="btn sm" onclick="finAdd('gasto')">+ Gasto</button>
+    <span style="font-size:.74rem;color:var(--mut2)">Material &gt;300€ → márcalo como amortización (se deduce en varios años).</span>
+  </div>
+  <div style="overflow-x:auto"><table style="min-width:780px"><thead><tr>
+    <th>Concepto</th><th>Fecha</th><th class="num">Subtotal</th><th class="num">IVA %</th><th class="num">Total</th><th>Amortización</th><th>Años</th><th></th>
+  </tr></thead><tbody>
+  ${gas.length?gas.map(m=>`<tr ${m.amort?'style="background:var(--accbg)"':''}>
+    <td>${fInput(m.id,'concepto',m.concepto||'','text',180)}</td>
+    <td>${fInput(m.id,'fecha',m.fecha||'','date',125)}</td>
+    <td class="num">${fInput(m.id,'importe',m.importe||0,'number',88)}</td>
+    <td class="num">${fInput(m.id,'iva',m.iva==null?21:m.iva,'number',56)}</td>
+    <td class="num">${eur(totalGasto(m))}</td>
+    <td style="text-align:center"><input type="checkbox" ${m.amort?'checked':''} onchange="finSet('${m.id}','amort',this.checked)">${(Number(m.importe)||0)>300&&!m.amort?' <span class="tag" style="color:var(--orange)">>300€</span>':''}</td>
+    <td class="num">${m.amort?fInput(m.id,'amort_anios',m.amort_anios||4,'number',48):'—'}</td>
+    <td><button class="trow-x" onclick="finDel('${m.id}')">🗑</button></td>
+  </tr>`).join(''):'<tr><td colspan="8" style="text-align:center;color:var(--mut2);padding:30px">Sin gastos en '+finYear+'. Añade el primero 👆</td></tr>'}
+  </tbody>
+  ${gas.length?`<tfoot><tr><td colspan="2"><b>TOTAL</b></td><td class="num"><b>${eur(tot(m=>Number(m.importe)||0))}</b></td><td></td><td class="num"><b>${eur(tot(totalGasto))}</b></td><td colspan="3"></td></tr></tfoot>`:''}
+  </table></div>`;
+}
+function renderResumen(){
+  const mov=cache.movimientos||[];const yr=finYear;
+  const ing=mov.filter(m=>m.tipo==='ingreso'&&yOf(m.fecha)===yr);
+  const gas=mov.filter(m=>m.tipo==='gasto'&&yOf(m.fecha)===yr);
+  const Q={};for(let q=1;q<=4;q++)Q[q]={ing:0,ivaR:0,gas:0,ivaS:0,reten:0,amort:0};
+  ing.forEach(m=>{const q=qOf(m.fecha);Q[q].ing+=Number(m.importe)||0;Q[q].ivaR+=ivaOf(m);Q[q].reten+=irpfAmt(m);});
+  gas.forEach(m=>{const q=qOf(m.fecha);Q[q].ivaS+=ivaOf(m);if(m.amort)Q[q].amort+=amortAnual(m);else Q[q].gas+=Number(m.importe)||0;});
+  let acc=0,iY=0,gY=0,aY=0,rY=0;const m130={};
+  for(let q=1;q<=4;q++){iY+=Q[q].ing;gY+=Q[q].gas;aY+=Q[q].amort;rY+=Q[q].reten;const ben=iY-gY-aY;const due=Math.max(0,ben*0.20-rY);const pay=Math.max(0,due-acc);acc+=pay;m130[q]=pay;}
+  const row=q=>{const iva303=Q[q].ivaR-Q[q].ivaS;const ben=Q[q].ing-Q[q].gas-Q[q].amort;return `<tr>
+    <td><b>T${q}</b></td><td class="num">${eur(Q[q].ing)}</td><td class="num">${eur(Q[q].ivaR)}</td><td class="num">${eur(Q[q].gas+Q[q].amort)}</td><td class="num">${eur(Q[q].ivaS)}</td>
+    <td class="num" style="color:${iva303>=0?'var(--orange)':'var(--green)'}">${iva303<0?'−':''}${eur(Math.abs(iva303))}${iva303<0?' (a favor)':''}</td>
+    <td class="num">${eur(Q[q].reten)}</td><td class="num">${eur(ben)}</td><td class="num" style="color:${m130[q]>0?'var(--orange)':'var(--mut)'}">${eur(m130[q])}</td></tr>`;};
+  const ingA=iY,gasA=gY,benA=iY-gY-aY,irpf=irpfEstimate(benA-5550);
+  $('#finBody').innerHTML=`
+  <div class="banner">⚠️ <b>Estimación orientativa, no es asesoramiento fiscal.</b> IVA 21%, estimación directa, pago fraccionado 20%. Confírmalo con tu gestor.</div>
+  <div style="overflow-x:auto"><table style="min-width:820px"><thead><tr>
+    <th>Trim.</th><th class="num">Ingresos</th><th class="num">IVA repercut.</th><th class="num">Gastos</th><th class="num">IVA soport.</th><th class="num">Modelo 303 (IVA)</th><th class="num">Retenc. IRPF</th><th class="num">Beneficio</th><th class="num">Modelo 130</th>
+  </tr></thead><tbody>${[1,2,3,4].map(row).join('')}</tbody>
+  <tfoot><tr><td><b>Año</b></td><td class="num"><b>${eur(ingA)}</b></td><td class="num">${eur(Q[1].ivaR+Q[2].ivaR+Q[3].ivaR+Q[4].ivaR)}</td><td class="num"><b>${eur(gasA+aY)}</b></td><td class="num">${eur(Q[1].ivaS+Q[2].ivaS+Q[3].ivaS+Q[4].ivaS)}</td><td class="num"></td><td class="num">${eur(rY)}</td><td class="num"><b>${eur(benA)}</b></td><td class="num"><b>${eur(acc)}</b></td></tr></tfoot>
+  </table></div>
+  <div class="dash-grid" style="margin-top:18px">
+    <div class="widget"><h3>🧮 Renta anual estimada ${yr}</h3><div class="wlist">
+      <div class="wrow"><span class="r-title">Beneficio neto (ingresos − gastos − amort.)</span><span class="num ${benA>=0?'pos':'neg'}">${eur(benA)}</span></div>
+      <div class="wrow"><span class="r-title">IRPF estimado (tramos)</span><span class="num" style="color:var(--orange)">${eur(irpf)}</span></div>
+      <div class="wrow"><span class="r-title">Retenciones ya aplicadas (−)</span><span class="num">${eur(rY)}</span></div>
+      <div class="wrow"><span class="r-title">Pagos fraccionados 130 (−)</span><span class="num">${eur(acc)}</span></div>
+      <div class="wrow"><span class="r-title"><b>Quedaría por pagar en renta ~</b></span><span class="num" style="color:var(--accInk)">${eur(Math.max(0,irpf-rY-acc))}</span></div>
+    </div></div>
+    <div class="widget"><h3>ℹ️ Notas</h3><div style="font-size:.83rem;color:var(--mut);line-height:1.75">
+      • <b>303 (IVA):</b> IVA que cobras − IVA que pagas. Si sale negativo, queda a tu favor (compensación).<br>
+      • <b>130 (IRPF):</b> pago fraccionado del 20% del beneficio. Solo obligatorio si &lt;70% de tus ingresos llevan retención.<br>
+      • Cuando presentes las declaraciones, pásame el PDF y ajusto los importes reales.
+    </div></div>
+  </div>`;
 }
 function renderMovTable(){const mov=cache.movimientos||[];
   $('#finBody').innerHTML=`<div style="margin-bottom:14px"><button class="btn sm" onclick="openForm('movimientos',null,{iva:21,amort_anios:4,fecha:todayISO(),tipo:'ingreso',estado:'cobrado'})">+ Movimiento</button><span style="font-size:.74rem;color:var(--mut2);margin-left:10px">Importes = BASE sin IVA. El material >300€ se marca solo como amortización.</span></div>
