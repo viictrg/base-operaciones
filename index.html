@@ -428,10 +428,14 @@ document.getElementById('nav').addEventListener('click',e=>{
 });
 function toggleNav(){document.body.classList.toggle('nav-open');}
 function recargar(){const u=location.href.split('#')[0].split('?')[0];location.replace(u+'?r='+Date.now());}
+function saveUI(){try{localStorage.setItem('baseops_ui',JSON.stringify({SEC,finTab,subTab,ideaFilter,viewMode}));}catch(e){}}
+function loadUI(){try{const s=JSON.parse(localStorage.getItem('baseops_ui')||'{}');if(s.SEC)SEC=s.SEC;if(s.finTab)finTab=s.finTab;if(s.subTab)subTab=s.subTab;if(s.ideaFilter)ideaFilter=s.ideaFilter;if(s.viewMode)viewMode=s.viewMode;}catch(e){}}
+function setNavActive(){document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.sec===SEC));}
 function updateThemeIco(){const l=document.documentElement.classList.contains('light');document.querySelectorAll('.theme-ico').forEach(e=>e.textContent=l?'☀️':'🌙');}
 function toggleTheme(){const l=document.documentElement.classList.toggle('light');try{localStorage.setItem('baseops_theme',l?'light':'dark');}catch(e){}updateThemeIco();}
 function applyTheme(){try{if(localStorage.getItem('baseops_theme')==='light')document.documentElement.classList.add('light');}catch(e){}updateThemeIco();}
 function render(){
+  saveUI();
   if(SEC==='dashboard')return renderDashboard();
   if(SEC==='recursos')return renderRecursos();
   if(SEC==='finanzas')return renderFinanzas();
@@ -1136,7 +1140,7 @@ function showLogin(msg){
 }
 async function loginGoogle(){if(!sb)return;await sb.auth.signInWithOAuth({provider:'google',options:{redirectTo:location.href.split('#')[0].split('?')[0]}});}
 async function logout(){if(sb){try{await sb.auth.signOut();}catch(e){}}location.reload();}
-async function startApp(){const sb1=document.querySelector('.sidebar');if(sb1)sb1.style.display='';const mt=document.querySelector('.mobile-top');if(mt)mt.style.display='';$('#main').style.maxWidth='';await refreshAll();render();}
+async function startApp(){const sb1=document.querySelector('.sidebar');if(sb1)sb1.style.display='';const mt=document.querySelector('.mobile-top');if(mt)mt.style.display='';$('#main').style.maxWidth='';loadUI();setNavActive();await refreshAll();render();}
 
 /* BOOT */
 (async function(){
