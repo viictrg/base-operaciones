@@ -790,6 +790,14 @@ function irpfAmt(m){return mMeta(m).irpf?(Number(m.importe)||0)*0.15:0;}
 function brutoIng(m){return (Number(m.importe)||0)+ivaOf(m)-irpfAmt(m);}
 function netoIng(m){return (Number(m.importe)||0)-irpfAmt(m);}
 function totalGasto(m){return (Number(m.importe)||0)+ivaOf(m);}
+function reservaFor(ingArr,gas){
+  const ivaR=ingArr.reduce((s,m)=>s+ivaOf(m),0), ivaS=gas.reduce((s,m)=>s+ivaOf(m),0);
+  const bIng=ingArr.reduce((s,m)=>s+(Number(m.importe)||0),0);
+  const bGas=gas.filter(m=>!m.amort).reduce((s,m)=>s+(Number(m.importe)||0),0);
+  const amY=gas.filter(m=>m.amort).reduce((s,m)=>s+amortAnual(m),0);
+  const ret=ingArr.reduce((s,m)=>s+irpfAmt(m),0);
+  return Math.max(0,ivaR-ivaS)+Math.max(0,(bIng-bGas-amY)*0.20-ret);
+}
 function fInput(id,field,val,type,w){const v=(val==null?'':esc(val));return `<input class="fcell" type="${type}" value="${v}" style="width:${w}px" onchange="finSet('${id}','${field}',this.value)">`;}
 async function finSet(id,field,value){
   const m=(cache.movimientos||[]).find(x=>x.id===id);if(!m)return;
@@ -807,20 +815,17 @@ function renderFinanzas(){
   const cobrado=ing.filter(m=>m.estado==='cobrado').reduce((s,m)=>s+netoIng(m),0);
   const pendiente=ing.filter(m=>m.estado==='pendiente').reduce((s,m)=>s+brutoIng(m),0);
   const proy=ing.reduce((s,m)=>s+brutoIng(m),0);
-  const ivaRep=ing.reduce((s,m)=>s+ivaOf(m),0), ivaSop=gas.reduce((s,m)=>s+ivaOf(m),0);
-  const baseIng=ing.reduce((s,m)=>s+(Number(m.importe)||0),0);
-  const baseGas=gas.filter(m=>!m.amort).reduce((s,m)=>s+(Number(m.importe)||0),0);
-  const amortYr=gas.filter(m=>m.amort).reduce((s,m)=>s+amortAnual(m),0);
-  const reten=ing.reduce((s,m)=>s+irpfAmt(m),0);
-  const reserva=Math.max(0,ivaRep-ivaSop)+Math.max(0,(baseIng-baseGas-amortYr)*0.20-reten);
+  const confirmados=ing.filter(m=>m.estado!=='propuesta');
+  const reservaReal=reservaFor(confirmados,gas);
+  const reservaProy=reservaFor(ing,gas);
   $('#main').innerHTML=`
   <div class="pagehead"><div><h1>💰 Finanzas</h1><p>Tu hoja de ingresos y gastos — impuestos calculados solos.</p></div>
     <div class="cal-head" style="margin:0"><button class="cal-nav" onclick="finYear--;renderFinanzas()">‹</button><h2 style="min-width:auto;font-size:1rem">${yr}</h2><button class="cal-nav" onclick="finYear++;renderFinanzas()">›</button></div></div>
   <div class="stats-row">
     <div class="stat"><div class="lbl">Cobrado (neto)</div><div class="val pos">${eur(cobrado)}</div></div>
     <div class="stat"><div class="lbl">Pendiente de cobro</div><div class="val" style="color:var(--orange)">${eur(pendiente)}</div></div>
-    <div class="stat"><div class="lbl">Si todo se ejecuta</div><div class="val" style="color:var(--blue)">${eur(proy)}</div></div>
-    <div class="stat"><div class="lbl">Reserva impuestos</div><div class="val" style="color:var(--accInk)">${eur(reserva)}</div></div>
+    <div class="stat"><div class="lbl">🛡️ Reserva impuestos (cobrado + pendiente)</div><div class="val" style="color:var(--accInk)">${eur(reservaReal)}</div></div>
+    <div class="stat"><div class="lbl">📈 Reserva si todo se ejecuta</div><div class="val" style="color:var(--blue)">${eur(reservaProy)}</div></div>
   </div>
   <div class="sub-tabs">
     <button class="${finTab==='ingresos'?'active':''}" onclick="finTab='ingresos';renderFinanzas()">📥 Ingresos</button>
