@@ -446,7 +446,7 @@ function render(){
    DASHBOARD
    ============================================================ */
 function renderTareas(){
-  const tareas=cache.tareas||[]; const today=todayISO();
+  const tareas=(cache.tareas||[]).filter(t=>t.prioridad!=='evento'); const today=todayISO();
   const order={alta:0,media:1,baja:2};
   const sorted=[...tareas].sort((a,b)=>{
     if(!!a.hecha!==!!b.hecha)return a.hecha?1:-1;
@@ -479,7 +479,8 @@ function renderDashboard(){
   const act=ideas.filter(i=>i.estado!=='publicado');
   const prod=ideas.filter(i=>i.estado==='proceso'||i.estado==='grabado');
   const prox=ideas.filter(i=>i.fecha_pub).sort((a,b)=>a.fecha_pub.localeCompare(b.fecha_pub)).slice(0,6);
-  const tareas=cache.tareas||[]; const today=todayISO();
+  const tareas=(cache.tareas||[]).filter(t=>t.prioridad!=='evento'); const today=todayISO();
+  const eventos=(cache.tareas||[]).filter(t=>t.prioridad==='evento');
   const pendTareas=tareas.filter(t=>!t.hecha);
   const hoyTareas=tareas.filter(t=>!t.hecha&&t.fecha===today);
   $('#main').innerHTML=`
@@ -501,6 +502,10 @@ function renderDashboard(){
       <button class="btn sm" onclick="addTarea()">+ Añadir</button>
     </div>
     <div class="wlist">${renderTareas()}</div>
+  </div>
+  <div class="widget" style="margin-bottom:16px">
+    <h3>📅 Agenda · próximos eventos (de tu calendario Apple)</h3>
+    <div class="wlist">${eventos.filter(e=>e.fecha>=today).sort((a,b)=>a.fecha.localeCompare(b.fecha)).slice(0,8).map(e=>`<div class="wrow"><span class="r-title">${esc(e.texto)}</span><span class="tag" style="${e.fecha===today?'color:var(--orange);border:1px solid #f59e0b44':''}">${e.fecha===today?'Hoy':fdate(e.fecha)}${e.hora?' · '+esc(e.hora):''}</span></div>`).join('')||'<div style="color:var(--mut2);font-size:.84rem">Sin eventos próximos en tu calendario.</div>'}</div>
   </div>
   ${renderDashCalHTML()}
   <div class="dash-grid">
@@ -528,7 +533,10 @@ function renderDashCalHTML(){
   for(let d=1;d<=dim;d++){
     const ds=ymd(y,m,d);let chips='';
     ideas.filter(i=>i.fecha_pub===ds).forEach(i=>{const c=catColor(i.seccion,i.categoria);chips+=`<div class="cal-chip" onclick="event.stopPropagation();openEditor('${i.id}')" style="background:${c}22;border-color:${c};color:${c}" title="${esc(i.titulo)}">${esc(i.titulo)}</div>`;});
-    tareas.filter(t=>t.fecha===ds).forEach(t=>{chips+=`<div class="cal-chip" onclick="event.stopPropagation();toggleTarea('${t.id}')" style="background:var(--accbg);border-color:var(--accbd);color:var(--accInk);${t.hecha?'text-decoration:line-through;opacity:.55':''}" title="${esc(t.texto)}">${t.hora?esc(t.hora)+' ':''}${esc(t.texto)}</div>`;});
+    tareas.filter(t=>t.fecha===ds).forEach(t=>{
+      if(t.prioridad==='evento'){chips+=`<div class="cal-chip" onclick="event.stopPropagation()" style="background:rgba(56,189,248,.15);border-color:#38bdf8;color:#38bdf8" title="${esc(t.texto)}">${t.hora?esc(t.hora)+' ':''}${esc(t.texto)}</div>`;}
+      else{chips+=`<div class="cal-chip" onclick="event.stopPropagation();toggleTarea('${t.id}')" style="background:var(--accbg);border-color:var(--accbd);color:var(--accInk);${t.hecha?'text-decoration:line-through;opacity:.55':''}" title="${esc(t.texto)}">${t.hora?esc(t.hora)+' ':''}${esc(t.texto)}</div>`;}
+    });
     creds.filter(r=>credParse(r).dia===d).forEach(r=>{chips+=`<div class="cal-chip" style="background:var(--inset);border-color:var(--mut2);color:var(--mut);cursor:default" title="Renueva créditos">💳 ${esc(r.titulo)}</div>`;});
     cells+=`<div class="cal-cell ${ds===today?'today':''}" onclick="addTareaOn('${ds}')" title="Clic para añadir tarea"><div class="cal-daynum">${d}</div>${chips}</div>`;
   }
