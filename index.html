@@ -851,7 +851,8 @@ function renderFinanzas(){
   else renderPagosTable();
 }
 function renderIngresos(ing){
-  ing=ing.slice().sort((a,b)=>(a.fecha||'').localeCompare(b.fecha||''));
+  const fnum=m=>{const f=(mMeta(m).factura||'').match(/\d+/);return f?parseInt(f[0]):1e9;};
+  ing=ing.slice().sort((a,b)=>{const d=fnum(a)-fnum(b);return d!==0?d:(a.fecha||'').localeCompare(b.fecha||'');});
   const tot=f=>ing.reduce((s,m)=>s+f(m),0);
   $('#finBody').innerHTML=`
   <div style="margin-bottom:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
