@@ -912,7 +912,9 @@ function objetivoPanel(){
   const fijoRest=fijoMes*mesesRest;
   const gastoPend=mov.filter(m=>m.tipo==='gasto'&&m.estado==='pendiente').reduce((s,m)=>s+totalGasto(m),0);
   const ingY=ing.filter(m=>yOf(m.fecha)===yr);const gasY=mov.filter(m=>m.tipo==='gasto'&&yOf(m.fecha)===yr);
-  const reserva=reservaFor(ingY.filter(m=>m.estado!=='propuesta'),gasY);
+  const reservaBase=reservaFor(ingY.filter(m=>m.estado!=='propuesta'),gasY);
+  const futTax=Math.max(0,cfg.futuro)*0.30; // ~30% impuestos estimados sobre facturación futura (bruto, base sin IVA)
+  const reserva=reservaBase+futTax;
   const proy=saldo+porCobrar+cfg.futuro-fijoRest-gastoPend-cfg.hacienda-reserva;
   const goal=cfg.goal||50000;const pct=goal>0?Math.max(0,Math.min(100,proy/goal*100)):0;
   const gap=goal-proy;const porMes=mesesRest>0&&gap>0?gap/mesesRest:0;
@@ -937,12 +939,13 @@ function objetivoPanel(){
         ${line('Gastos fijos × '+mesesRest+' meses',fijoRest,-1)}
         ${line('Gastos variables pendientes',gastoPend,-1)}
         ${line('Hacienda (provisión)',cfg.hacienda,-1)}
-        ${line('Reserva impuestos (sobre lo facturado)',reserva,-1)}
+        ${line('Reserva impuestos (facturas actuales)',reservaBase,-1)}
+        ${line('Impuestos ~30% de tu facturación futura',futTax,-1)}
         <div style="border-top:1px solid var(--line);margin-top:6px;padding-top:6px;display:flex;justify-content:space-between"><b>Proyección a 31 dic</b><b class="num" style="color:${col}">${eur(proy)}</b></div>
       </div>
       <div><div class="lbl" style="margin-bottom:6px">✏️ Ajusta tus supuestos</div>
         <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:4px 0"><span style="color:var(--mut)">🎯 Meta de ahorro</span>${ci('goal',goal)}</div>
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:4px 0"><span style="color:var(--mut)">📈 Facturación futura estimada</span>${ci('futuro',cfg.futuro)}</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:4px 0"><span style="color:var(--mut)">📈 Facturación futura <span style="font-size:.74rem;color:var(--mut2)">(bruto, sin IVA)</span></span>${ci('futuro',cfg.futuro)}</div>
         <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:4px 0"><span style="color:var(--mut)">🏛️ Hacienda (provisión)</span>${ci('hacienda',cfg.hacienda)}</div>
         <div style="font-size:.74rem;color:var(--mut2);margin-top:8px;line-height:1.6">💡 <b>Liquidez ≠ rentabilidad.</b> Esto mide cuánto te quedará ahorrado; si sale rojo por culpa de cobros que llegan tarde, es un problema de caja, no de que el año vaya mal. Estimación orientativa.</div>
       </div>
