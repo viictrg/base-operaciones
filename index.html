@@ -929,6 +929,9 @@ function objetivoPanel(){
   const reserva=reservaBase+futTax;
   const proy=saldo+porCobrar+cfg.futuro+(cfg.renta||0)-fijoRest-gastoPend-gfTotal-cfg.hacienda-reserva;
   const goal=cfg.goal||50000;const pct=goal>0?Math.max(0,Math.min(100,proy/goal*100)):0;
+  const baseNoFut=proy-(cfg.futuro-futTax); // proyección sin contar la facturación futura
+  const reqTotal=Math.max(0,(goal-baseNoFut)/0.70); // facturación bruta necesaria (descontando ~30% impuestos)
+  const reqMes=mesesRest>0?reqTotal/mesesRest:0;
   const gap=goal-proy;const porMes=mesesRest>0&&gap>0?gap/mesesRest:0;
   const col=proy>=goal?'var(--green)':(proy>=goal*0.6?'var(--orange)':'var(--red)');
   const semaforo=proy>=goal?'🟢 Vas sobrado':(proy>=goal*0.6?'🟡 Vas en camino':'🔴 Vas justo');
@@ -941,6 +944,7 @@ function objetivoPanel(){
     <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin:8px 0 4px">
       <span style="font-size:2rem;font-weight:800;color:${col}">${eur(proy)}</span>
       <span style="color:var(--mut2)">proyección · meta <b style="color:var(--txt)">${eur(goal)}</b></span></div>
+    <div style="font-size:.82rem;color:var(--mut2);margin:2px 0 8px">${reqTotal>0?`🎯 Para llegar a la meta deberías facturar de media <b style="color:var(--txt)">${eur(reqMes)}/mes</b> <span style="color:var(--mut2)">(bruto, los ${mesesRest} meses restantes · ya descontados gastos e impuestos)</span>`:`🎯 Con tus números actuales <b style="color:var(--green)">ya llegas a la meta sin facturar más</b> 🎉`}</div>
     <div class="pbar"><div class="pbar-fill" style="width:${pct}%;background:${col}"></div></div>
     <div style="font-size:.8rem;color:var(--mut2);margin:6px 0 14px">${gap>0?`Te faltan <b style="color:${col}">${eur(gap)}</b> · necesitas facturar ~<b>${eur(porMes)}</b>/mes (neto) los ${mesesRest} meses que quedan`:`Vas por encima de la meta en <b style="color:var(--green)">${eur(-gap)}</b> 🎉`}</div>
     <div class="dash-grid">
