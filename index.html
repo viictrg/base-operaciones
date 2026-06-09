@@ -883,12 +883,47 @@ function fInput(id,field,val,type,w){const v=(val==null?'':esc(val));return `<in
 async function finSet(id,field,value){
   const m=(cache.movimientos||[]).find(x=>x.id===id);if(!m)return;
   if(['importe','iva','amort_anios'].includes(field))value=parseFloat(value)||0;
-  if(['factura','irpf','nota'].includes(field)){const me=mMeta(m);me[field]=value;m.notas=JSON.stringify(me);await db.update('movimientos',id,{notas:m.notas});}
+  if(['factura','irpf','nota','hasta'].includes(field)){const me=mMeta(m);me[field]=value;m.notas=JSON.stringify(me);await db.update('movimientos',id,{notas:m.notas});}
   else{m[field]=value;await db.update('movimientos',id,{[field]:value});}
   renderFinanzas();
 }
 async function finAdd(tipo){const r=await db.insert('movimientos',{tipo,concepto:'',importe:0,iva:tipo==='ingreso'?0:21,fecha:todayISO(),estado:tipo==='ingreso'?'cobrado':'pagado',categoria:tipo==='ingreso'?'cliente':'general',amort:false,amort_anios:4,cliente:'',notas:'{}'});if(r){cache.movimientos=await db.list('movimientos');renderFinanzas();}}
 async function finDel(id){if(!confirm('¿Borrar esta fila?'))return;await db.remove('movimientos',id);cache.movimientos=await db.list('movimientos');renderFinanzas();}
+async function finAddFijo(){const r=await db.insert('movimientos',{tipo:'fijo',concepto:'',importe:0,iva:0,fecha:todayISO(),estado:'pendiente',categoria:'fijo',amort:false,amort_anios:4,cliente:'',notas:'{}'});if(r){cache.movimientos=await db.list('movimientos');renderFinanzas();}}
+async function ensureCaja(){const r=await db.insert('movimientos',{tipo:'caja',concepto:'Saldo en cuenta',importe:0,iva:0,fecha:todayISO(),estado:'pagado',categoria:'caja',amort:false,amort_anios:4,cliente:'',notas:'{}'});if(r){cache.movimientos=await db.list('movimientos');renderFinanzas();}}
+function cajaPanel(){
+  const mov=cache.movimientos||[];
+  const caja=mov.find(m=>m.tipo==='caja');const cajaAmt=caja?Number(caja.importe)||0:0;
+  const fijos=mov.filter(m=>m.tipo==='fijo');
+  const fTot=fijos.reduce((s,m)=>s+(Number(m.importe)||0),0);
+  const fPend=fijos.filter(m=>m.estado==='pendiente').reduce((s,m)=>s+(Number(m.importe)||0),0);const fPag=fTot-fPend;
+  const porCobrar=mov.filter(m=>m.tipo==='ingreso'&&m.estado==='pendiente').reduce((s,m)=>s+netoIng(m),0);
+  const gPend=mov.filter(m=>m.tipo==='gasto'&&m.estado==='pendiente').reduce((s,m)=>s+totalGasto(m),0);
+  const porPagar=fPend+gPend;const proy=cajaAmt+porCobrar-porPagar;
+  const cajaCell=caja?`<input class="fcell" type="number" value="${cajaAmt}" style="width:150px;font-size:1.5rem;font-weight:800;padding:4px 8px" onchange="finSet('${caja.id}','importe',this.value)">`:`<button class="btn sm" onclick="ensureCaja()">+ Definir saldo</button>`;
+  return `<div class="widget" style="margin-top:24px">
+    <h3 style="font-size:1rem;color:var(--txt);margin-bottom:16px">🏦 Caja · liquidez y gastos fijos</h3>
+    <div class="fin-stats" style="margin-bottom:18px">
+      <div class="stat"><div class="lbl">💶 Dinero actual en cuenta</div><div style="margin-top:6px">${cajaCell}</div></div>
+      <div class="stat"><div class="lbl">📌 Necesito a fin de mes (por pagar)</div><div class="val xl" style="color:var(--orange)">${eur(porPagar)}</div><div style="font-size:.72rem;color:var(--mut2);margin-top:4px">Gastos fijos pendientes + gastos pendientes</div></div>
+      <div class="stat b2"><div class="lbl">📊 Proyección · actual + por cobrar − por pagar</div><div class="val xl" style="color:${proy>=0?'var(--green)':'var(--red)'}">${eur(proy)}</div><div style="font-size:.72rem;color:var(--mut2);margin-top:4px">${eur(cajaAmt)} + ${eur(porCobrar)} por cobrar − ${eur(porPagar)} por pagar</div></div>
+    </div>
+    <div style="margin-bottom:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <button class="btn sm" onclick="finAddFijo()">+ Gasto fijo mensual</button>
+      <span style="font-size:.74rem;color:var(--mut2)">Cuotas y recurrentes (ej. Hacienda a plazos hasta dic 2026, alquiler, suscripciones…). Marca pagado/pendiente.</span>
+    </div>
+    <div style="overflow-x:auto"><table style="min-width:560px"><thead><tr><th>Concepto</th><th class="num">€/mes</th><th>Estado</th><th>Hasta</th><th></th></tr></thead><tbody>
+    ${fijos.length?fijos.map(m=>{const me=mMeta(m);return `<tr class="row-${m.estado==='pendiente'?'pendiente':'cobrado'}">
+      <td>${fInput(m.id,'concepto',m.concepto||'','text',180)}</td>
+      <td class="num">${fInput(m.id,'importe',m.importe||0,'number',88)}</td>
+      <td><select class="fcell" onchange="finSet('${m.id}','estado',this.value)">${[['pagado','✅ Pagado'],['pendiente','⏳ Pendiente']].map(o=>`<option value="${o[0]}" ${m.estado===o[0]?'selected':''}>${o[1]}</option>`).join('')}</select></td>
+      <td>${fInput(m.id,'hasta',me.hasta||'','text',90)}</td>
+      <td><button class="trow-x" onclick="finDel('${m.id}')">🗑</button></td></tr>`;}).join(''):'<tr><td colspan="5" style="text-align:center;color:var(--mut2);padding:24px">Sin gastos fijos. Añade el primero 👆</td></tr>'}
+    </tbody>
+    ${fijos.length?`<tfoot><tr><td><b>TOTAL / mes</b></td><td class="num"><b>${eur(fTot)}</b></td><td colspan="3" style="font-size:.78rem;color:var(--mut)">✅ Pagado ${eur(fPag)} · ⏳ Falta ${eur(fPend)}</td></tr></tfoot>`:''}
+    </table></div>
+  </div>`;
+}
 function renderFinanzas(){
   const mov=cache.movimientos||[];const yr=finYear;
   const ing=mov.filter(m=>m.tipo==='ingreso'&&yOf(m.fecha)===yr);
@@ -921,7 +956,7 @@ function renderFinanzas(){
     <button class="${finTab==='gastos'?'active':''}" onclick="finTab='gastos';renderFinanzas()">📤 Gastos</button>
     <button class="${finTab==='resumen'?'active':''}" onclick="finTab='resumen';renderFinanzas()">🧮 Resumen fiscal</button>
     <button class="${finTab==='pagos'?'active':''}" onclick="finTab='pagos';renderFinanzas()">📌 Próximos pagos</button>
-  </div><div id="finBody"></div>`;
+  </div><div id="finBody"></div>${cajaPanel()}`;
   if(finTab==='ingresos')renderIngresos(ing);
   else if(finTab==='gastos')renderGastos(gas);
   else if(finTab==='resumen')renderResumen();
@@ -959,15 +994,17 @@ function renderIngresos(ing){
 function renderGastos(gas){
   gas=gas.slice().sort((a,b)=>(a.fecha||'').localeCompare(b.fecha||''));
   const tot=f=>gas.reduce((s,m)=>s+f(m),0);
+  const gPag=gas.filter(m=>m.estado!=='pendiente').reduce((s,m)=>s+totalGasto(m),0);
+  const gPen=gas.filter(m=>m.estado==='pendiente').reduce((s,m)=>s+totalGasto(m),0);
   $('#finBody').innerHTML=`
   <div style="margin-bottom:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
     <button class="btn sm" onclick="finAdd('gasto')">+ Gasto</button>
     <span style="font-size:.74rem;color:var(--mut2)">Material &gt;300€ → márcalo como amortización (se deduce en varios años).</span>
   </div>
-  <div style="overflow-x:auto"><table style="min-width:780px"><thead><tr>
-    <th>Concepto</th><th>Fecha</th><th class="num">Subtotal</th><th class="num">IVA %</th><th class="num">Total</th><th>Amortización</th><th>Años</th><th></th>
+  <div style="overflow-x:auto"><table style="min-width:860px"><thead><tr>
+    <th>Concepto</th><th>Fecha</th><th class="num">Subtotal</th><th class="num">IVA %</th><th class="num">Total</th><th>Amortización</th><th>Años</th><th>Estado</th><th></th>
   </tr></thead><tbody>
-  ${gas.length?gas.map(m=>`<tr ${m.amort?'style="background:var(--accbg)"':''}>
+  ${gas.length?gas.map(m=>`<tr class="row-${m.estado==='pendiente'?'pendiente':'cobrado'}">
     <td>${fInput(m.id,'concepto',m.concepto||'','text',180)}</td>
     <td>${fInput(m.id,'fecha',m.fecha||'','date',125)}</td>
     <td class="num">${fInput(m.id,'importe',m.importe||0,'number',88)}</td>
@@ -975,10 +1012,11 @@ function renderGastos(gas){
     <td class="num">${eur(totalGasto(m))}</td>
     <td style="text-align:center"><input type="checkbox" ${m.amort?'checked':''} onchange="finSet('${m.id}','amort',this.checked)">${(Number(m.importe)||0)>300&&!m.amort?' <span class="tag" style="color:var(--orange)">>300€</span>':''}</td>
     <td class="num">${m.amort?fInput(m.id,'amort_anios',m.amort_anios||4,'number',48):'—'}</td>
+    <td><select class="fcell" onchange="finSet('${m.id}','estado',this.value)">${[['pagado','✅ Pagado'],['pendiente','⏳ Pendiente']].map(o=>`<option value="${o[0]}" ${m.estado===o[0]?'selected':''}>${o[1]}</option>`).join('')}</select></td>
     <td><button class="trow-x" onclick="finDel('${m.id}')">🗑</button></td>
-  </tr>`).join(''):'<tr><td colspan="8" style="text-align:center;color:var(--mut2);padding:30px">Sin gastos en '+finYear+'. Añade el primero 👆</td></tr>'}
+  </tr>`).join(''):'<tr><td colspan="9" style="text-align:center;color:var(--mut2);padding:30px">Sin gastos en '+finYear+'. Añade el primero 👆</td></tr>'}
   </tbody>
-  ${gas.length?`<tfoot><tr><td colspan="2"><b>TOTAL</b></td><td class="num"><b>${eur(tot(m=>Number(m.importe)||0))}</b></td><td></td><td class="num"><b>${eur(tot(totalGasto))}</b></td><td colspan="3"></td></tr></tfoot>`:''}
+  ${gas.length?`<tfoot><tr><td colspan="2"><b>TOTAL</b></td><td class="num"><b>${eur(tot(m=>Number(m.importe)||0))}</b></td><td></td><td class="num"><b>${eur(tot(totalGasto))}</b></td><td colspan="2" style="font-size:.78rem;color:var(--mut)">✅ Pagado ${eur(gPag)} · ⏳ Falta ${eur(gPen)}</td><td colspan="2"></td></tr></tfoot>`:''}
   </table></div>`;
 }
 function renderResumen(){
