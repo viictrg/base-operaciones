@@ -898,10 +898,10 @@ async function finDel(id){if(!confirm('¿Borrar esta fila?'))return;await db.rem
 async function finAddFijo(){const r=await db.insert('movimientos',{tipo:'fijo',concepto:'',importe:0,iva:0,fecha:todayISO(),estado:'pendiente',categoria:'fijo',amort:false,amort_anios:4,cliente:'',notas:'{}'});if(r){cache.movimientos=await db.list('movimientos');renderFinanzas();}}
 async function ensureCaja(){const r=await db.insert('movimientos',{tipo:'caja',concepto:'Saldo en cuenta',importe:0,iva:0,fecha:todayISO(),estado:'pagado',categoria:'caja',amort:false,amort_anios:4,cliente:'',notas:'{}'});if(r){cache.movimientos=await db.list('movimientos');renderFinanzas();}}
 function movOrd(m){const o=mMeta(m).orden;return(o===undefined||o===''||o===null)?1e9:Number(o);}
-function finCfg(){const c=(cache.movimientos||[]).find(m=>m.tipo==='config');const d={goal:50000,futuro:0,hacienda:0,gastoFut:0};if(c){try{Object.assign(d,JSON.parse(c.notas||'{}'));}catch(e){}}return d;}
+function finCfg(){const c=(cache.movimientos||[]).find(m=>m.tipo==='config');const d={goal:50000,futuro:0,hacienda:0,gastoFut:0,renta:0};if(c){try{Object.assign(d,JSON.parse(c.notas||'{}'));}catch(e){}}return d;}
 async function finSetCfg(field,value){value=parseFloat(value)||0;let c=(cache.movimientos||[]).find(m=>m.tipo==='config');
-  if(!c){await db.insert('movimientos',{tipo:'config',concepto:'config',importe:0,iva:0,fecha:todayISO(),estado:'pagado',categoria:'config',amort:false,amort_anios:4,cliente:'',notas:JSON.stringify({goal:50000,futuro:0,hacienda:0,gastoFut:0})});cache.movimientos=await db.list('movimientos');c=(cache.movimientos).find(m=>m.tipo==='config');}
-  let d={goal:50000,futuro:0,hacienda:0,gastoFut:0};try{Object.assign(d,JSON.parse(c.notas||'{}'));}catch(e){}d[field]=value;await db.update('movimientos',c.id,{notas:JSON.stringify(d)});cache.movimientos=await db.list('movimientos');renderFinanzas();}
+  if(!c){await db.insert('movimientos',{tipo:'config',concepto:'config',importe:0,iva:0,fecha:todayISO(),estado:'pagado',categoria:'config',amort:false,amort_anios:4,cliente:'',notas:JSON.stringify({goal:50000,futuro:0,hacienda:0,gastoFut:0,renta:0})});cache.movimientos=await db.list('movimientos');c=(cache.movimientos).find(m=>m.tipo==='config');}
+  let d={goal:50000,futuro:0,hacienda:0,gastoFut:0,renta:0};try{Object.assign(d,JSON.parse(c.notas||'{}'));}catch(e){}d[field]=value;await db.update('movimientos',c.id,{notas:JSON.stringify(d)});cache.movimientos=await db.list('movimientos');renderFinanzas();}
 function objetivoPanel(){
   const mov=cache.movimientos||[];const cfg=finCfg();const yr=finYear;
   const caja=mov.find(m=>m.tipo==='caja');const saldo=caja?Number(caja.importe)||0:0;
@@ -915,7 +915,7 @@ function objetivoPanel(){
   const reservaBase=reservaFor(ingY.filter(m=>m.estado!=='propuesta'),gasY);
   const futTax=Math.max(0,cfg.futuro)*0.30; // ~30% impuestos estimados sobre facturación futura (bruto, base sin IVA)
   const reserva=reservaBase+futTax;
-  const proy=saldo+porCobrar+cfg.futuro-fijoRest-gastoPend-cfg.gastoFut-cfg.hacienda-reserva;
+  const proy=saldo+porCobrar+cfg.futuro+(cfg.renta||0)-fijoRest-gastoPend-cfg.gastoFut-cfg.hacienda-reserva;
   const goal=cfg.goal||50000;const pct=goal>0?Math.max(0,Math.min(100,proy/goal*100)):0;
   const gap=goal-proy;const porMes=mesesRest>0&&gap>0?gap/mesesRest:0;
   const col=proy>=goal?'var(--green)':(proy>=goal*0.6?'var(--orange)':'var(--red)');
@@ -940,6 +940,7 @@ function objetivoPanel(){
         ${line('Gastos variables pendientes',gastoPend,-1)}
         ${line('Gastos variables futuros estimados',cfg.gastoFut,-1)}
         ${line('Hacienda (provisión)',cfg.hacienda,-1)}
+        ${(cfg.renta||0)!==0?line('Renta 2025 ('+((cfg.renta||0)>=0?'te devuelven':'a pagar')+')',Math.abs(cfg.renta||0),(cfg.renta||0)>=0?1:-1):''}
         ${line('Reserva impuestos (facturas actuales)',reservaBase,-1)}
         ${line('Impuestos ~30% de tu facturación futura',futTax,-1)}
         <div style="border-top:1px solid var(--line);margin-top:6px;padding-top:6px;display:flex;justify-content:space-between"><b>Proyección a 31 dic</b><b class="num" style="color:${col}">${eur(proy)}</b></div>
@@ -949,6 +950,7 @@ function objetivoPanel(){
         <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:4px 0"><span style="color:var(--mut)">📈 Facturación futura <span style="font-size:.74rem;color:var(--mut2)">(bruto, sin IVA)</span></span>${ci('futuro',cfg.futuro)}</div>
         <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:4px 0"><span style="color:var(--mut)">🎬 Gastos variables futuros <span style="font-size:.74rem;color:var(--mut2)">(ej. montajes YT)</span></span>${ci('gastoFut',cfg.gastoFut)}</div>
         <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:4px 0"><span style="color:var(--mut)">🏛️ Hacienda (provisión)</span>${ci('hacienda',cfg.hacienda)}</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:4px 0"><span style="color:var(--mut)">🧾 Renta 2025 <span style="font-size:.74rem;color:var(--mut2)">(+ te devuelven / − pagas)</span></span>${ci('renta',cfg.renta)}</div>
         <div style="font-size:.74rem;color:var(--mut2);margin-top:8px;line-height:1.6">💡 <b>Liquidez ≠ rentabilidad.</b> Esto mide cuánto te quedará ahorrado; si sale rojo por culpa de cobros que llegan tarde, es un problema de caja, no de que el año vaya mal. Estimación orientativa.</div>
       </div>
     </div>
