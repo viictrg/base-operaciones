@@ -908,7 +908,7 @@ function objetivoPanel(){
   const ing=mov.filter(m=>m.tipo==='ingreso');
   const porCobrar=ing.filter(m=>m.estado==='pendiente').reduce((s,m)=>s+netoIng(m),0);
   const fijos=mov.filter(m=>m.tipo==='fijo');const fijoMes=fijos.reduce((s,m)=>s+(Number(m.importe)||0),0);
-  const now=new Date();const mesesRest=(yr>now.getFullYear())?12:(yr<now.getFullYear()?0:Math.max(0,12-now.getMonth()));
+  const now=new Date();const mesesRest=(yr>now.getFullYear())?12:(yr<now.getFullYear()?0:Math.max(0,12-now.getMonth()-1));
   const fijoRest=fijoMes*mesesRest;
   const gastoPend=mov.filter(m=>m.tipo==='gasto'&&m.estado==='pendiente').reduce((s,m)=>s+totalGasto(m),0);
   const ingY=ing.filter(m=>yOf(m.fecha)===yr);const gasY=mov.filter(m=>m.tipo==='gasto'&&yOf(m.fecha)===yr);
