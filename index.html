@@ -142,14 +142,25 @@
   .note-check{appearance:none;-webkit-appearance:none;width:19px;height:19px;border:1.6px solid var(--mut2);border-radius:50%;cursor:pointer;flex:none;margin-top:1px;position:relative;transition:.12s}
   .note-check:checked{background:var(--accInk);border-color:var(--accInk)}
   .note-check:checked::after{content:'✓';position:absolute;color:#fff;font-size:.72rem;font-weight:700;left:3px;top:0}
-  .ref-list{display:flex;flex-direction:column;gap:8px}
-  .ref-row{display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:11px 14px}
-  .ref-ico{font-size:1.2rem;flex:none}
-  .ref-main{flex:1;min-width:0}
-  .ref-title{color:var(--txt);font-weight:600;font-size:.92rem;text-decoration:none;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ref-block{margin-bottom:18px}
+  .ref-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:10px}
+  .ref-h h3{font-size:.95rem;font-weight:800;letter-spacing:.2px}
+  .ref-cols{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start}
+  @media(max-width:900px){.ref-cols{grid-template-columns:1fr}}
+  .ref-profiles{display:flex;flex-wrap:wrap;gap:9px}
+  .ref-grid{display:flex;flex-direction:column;gap:10px}
+  .ref-card{display:flex;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px;align-items:center}
+  .ref-cover{width:88px;height:88px;border-radius:9px;background:var(--inset) center/cover no-repeat;flex:none;display:flex;align-items:center;justify-content:center;font-size:1.6rem;text-decoration:none;overflow:hidden}
+  .ref-cbody{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+  .ref-title{color:var(--txt);font-weight:600;font-size:.9rem;text-decoration:none;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .ref-title:hover{color:var(--accInk)}
-  .ref-sub{font-size:.78rem;color:var(--mut2);margin-top:2px}
-  .ref-prof{font-size:.76rem;color:var(--accInk);text-decoration:none;border:1px solid var(--accbd);padding:4px 9px;border-radius:8px;flex:none;white-space:nowrap}
+  .ref-sub{font-size:.78rem;color:var(--mut2)}
+  .ref-actions{display:flex;gap:6px;align-items:center;margin-top:3px}
+  .ref-prof{font-size:.74rem;color:var(--accInk);text-decoration:none;border:1px solid var(--accbd);padding:3px 8px;border-radius:7px;white-space:nowrap}
+  .ref-chip{display:flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--line);border-radius:20px;padding:6px 7px 6px 13px;font-size:.85rem}
+  .ref-chip a{color:var(--txt);text-decoration:none;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .ref-chip a:hover{color:var(--accInk)}
+  .ref-chip .trow-x{font-size:.72rem}
 
   /* DASHBOARD */
   .dash-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}
@@ -830,26 +841,35 @@ function renderRefs(sec){
       <div class="thumb-body"><h4>${esc(r.titulo)||'Sin título'}</h4><span>${esc(r.autor)||esc(r.plataforma)||''}</span></div></div>`).join(''):'<div class="empty">Añade tu primera referencia 👆</div>'}
   </div>`;
 }
+function ytId(u){const m=(u||'').match(/(?:v=|youtu\.be\/|embed\/|shorts\/)([\w-]{11})/);return m?m[1]:'';}
+function refThumb(r){if(r.plataforma==='youtube'){const id=ytId(r.url);if(id)return 'https://img.youtube.com/vi/'+id+'/hqdefault.jpg';}return r.url_imagen||'';}
+const PLICO={instagram:'📸',tiktok:'🎵',youtube:'▶️',reel:'📸',otro:'🔗'};
+function refCard(r){const prof=(r.notas&&/^https?:/.test(r.notas))?r.notas:'';const img=refThumb(r);
+  return `<div class="ref-card">
+    <a href="${esc(r.url)}" target="_blank" rel="noopener" class="ref-cover" style="${img?`background-image:url('${esc(img)}')`:''}">${img?'':(PLICO[r.plataforma]||'🔗')}</a>
+    <div class="ref-cbody">
+      <a href="${esc(r.url)}" target="_blank" rel="noopener" class="ref-title">${esc(r.titulo)||esc(r.url)}</a>
+      ${r.autor?`<div class="ref-sub">${esc(r.autor)}</div>`:'<div class="ref-sub" style="color:var(--orange)">título/perfil pendiente</div>'}
+      <div class="ref-actions">${prof?`<a href="${esc(prof)}" target="_blank" rel="noopener" class="ref-prof">👤 perfil</a>`:''}<button class="mini-btn" onclick="openForm('referencias','${r.id}')" title="Editar">✏️</button><button class="trow-x" onclick="delRef('${r.id}')" title="Borrar">🗑</button></div>
+    </div></div>`;}
+function refProfChip(r){return `<div class="ref-chip"><span>${PLICO[r.plataforma]||'🔗'}</span><a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.autor)||esc(r.titulo)||esc(r.url)}</a><button class="trow-x" onclick="delRef('${r.id}')" title="Borrar">✕</button></div>`;}
 function renderReferenciasHub(){
-  const cats=[['reels','🎬 Reels'],['youtube','▶️ YouTube'],['perfiles','✨ Perfiles que me inspiran']];
-  const cur=subTab.refs||'reels';const curSec='hub_'+cur;
-  const items=(cache.referencias||[]).filter(r=>r.seccion===curSec);
-  const plIco={instagram:'📸',tiktok:'🎵',youtube:'▶️',reel:'📸',otro:'🔗'};
+  const refs=cache.referencias||[];
+  const reels=refs.filter(r=>r.seccion==='hub_reels');
+  const yt=refs.filter(r=>r.seccion==='hub_youtube');
+  const perfiles=refs.filter(r=>r.seccion==='hub_perfiles');
+  const empty=t=>`<div style="color:var(--mut2);font-size:.84rem;padding:14px 2px">${t}</div>`;
   $('#main').innerHTML=`
-  <div class="pagehead"><div><h1>📚 Referencias</h1><p>Cuentas y vídeos que te inspiran, ordenados. Pásame links por el chat y los clasifico solos.</p></div>
-    <button class="btn" onclick="openForm('referencias',null,{seccion:'${curSec}'})">+ Añadir link</button></div>
-  <div class="sub-tabs">${cats.map(c=>`<button class="${cur===c[0]?'active':''}" onclick="subTab.refs='${c[0]}';render()">${c[1]}</button>`).join('')}</div>
-  <div class="ref-list">
-   ${items.length?items.map(r=>{const prof=(r.notas&&/^https?:/.test(r.notas))?r.notas:'';return `<div class="ref-row">
-      <span class="ref-ico">${plIco[r.plataforma]||'🔗'}</span>
-      <div class="ref-main">
-        <a href="${esc(r.url)}" target="_blank" rel="noopener" class="ref-title">${esc(r.titulo)||esc(r.url)}</a>
-        ${r.autor?`<div class="ref-sub">${esc(r.autor)}</div>`:'<div class="ref-sub" style="color:var(--orange)">perfil pendiente</div>'}
-      </div>
-      ${prof?`<a href="${esc(prof)}" target="_blank" rel="noopener" class="ref-prof" title="Perfil del creador">👤 perfil</a>`:''}
-      <button class="mini-btn" onclick="openForm('referencias','${r.id}')" title="Editar">✏️</button>
-      <button class="trow-x" onclick="delRef('${r.id}')" title="Borrar">🗑</button>
-   </div>`;}).join(''):'<div class="empty" style="padding:34px;color:var(--mut2);text-align:center">Aún no hay nada aquí. Pásame links por el chat y los ordeno, o usa "+ Añadir link".</div>'}
+  <div class="pagehead"><div><h1>📚 Referencias</h1><p>Todo a la vista. Pásame links por el chat y los clasifico solos.</p></div></div>
+  <div class="ref-block">
+    <div class="ref-h"><h3>✨ Perfiles que me inspiran</h3><button class="btn sm" onclick="openForm('referencias',null,{seccion:'hub_perfiles'})">+ perfil</button></div>
+    <div class="ref-profiles">${perfiles.length?perfiles.map(refProfChip).join(''):empty('Pásame links de cuentas que te inspiran.')}</div>
+  </div>
+  <div class="ref-cols">
+    <div class="ref-block"><div class="ref-h"><h3>🎬 Reels</h3><button class="btn sm" onclick="openForm('referencias',null,{seccion:'hub_reels'})">+ link</button></div>
+      <div class="ref-grid">${reels.length?reels.map(refCard).join(''):empty('Aún no hay reels guardados.')}</div></div>
+    <div class="ref-block"><div class="ref-h"><h3>▶️ YouTube</h3><button class="btn sm" onclick="openForm('referencias',null,{seccion:'hub_youtube'})">+ link</button></div>
+      <div class="ref-grid">${yt.length?yt.map(refCard).join(''):empty('Aún no hay vídeos guardados.')}</div></div>
   </div>`;
 }
 async function delRef(id){const src=(cache.referencias||[]).find(r=>r.id===id);const old=src?{...src}:null;await db.remove('referencias',id);cache.referencias=await db.list('referencias');if(old)recUndo(async()=>{await db.insert('referencias',old);cache.referencias=await db.list('referencias');render();});render();}
