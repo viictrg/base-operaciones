@@ -126,6 +126,22 @@
   details.gfut summary{cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:10px;list-style:none}
   details.gfut summary::-webkit-details-marker{display:none}
   details.gfut[open] summary{margin-bottom:4px}
+  .notes-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:16px}
+  @media(max-width:900px){.notes-grid{grid-template-columns:1fr}}
+  .note-card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:15px 17px;display:flex;flex-direction:column;min-height:190px}
+  .note-card h4{font-size:.95rem;font-weight:800;margin-bottom:11px;display:flex;align-items:center;gap:7px;letter-spacing:.2px}
+  .note-add{width:100%;background:transparent;border:none;border-bottom:1px solid var(--line);color:var(--txt);font-size:.92rem;padding:7px 2px;margin-bottom:6px;outline:none}
+  .note-add:focus{border-bottom-color:var(--accInk)}
+  .note-add::placeholder{color:var(--mut2)}
+  .note-item{display:flex;align-items:flex-start;gap:10px;padding:8px 2px;border-bottom:1px solid var(--line)}
+  .note-item:last-child{border-bottom:none}
+  .note-item .ntxt{flex:1;font-size:.92rem;line-height:1.38;word-break:break-word}
+  .note-item.done .ntxt{text-decoration:line-through;color:var(--mut2)}
+  .note-item .nx{opacity:0;background:none;border:none;color:var(--mut2);cursor:pointer;font-size:.85rem;flex:none}
+  .note-item:hover .nx{opacity:1}
+  .note-check{appearance:none;-webkit-appearance:none;width:19px;height:19px;border:1.6px solid var(--mut2);border-radius:50%;cursor:pointer;flex:none;margin-top:1px;position:relative;transition:.12s}
+  .note-check:checked{background:var(--accInk);border-color:var(--accInk)}
+  .note-check:checked::after{content:'✓';position:absolute;color:#fff;font-size:.72rem;font-weight:700;left:3px;top:0}
 
   /* DASHBOARD */
   .dash-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}
@@ -500,7 +516,19 @@ async function addTarea(){
   const r=await db.insert('tareas',row); if(r){cache.tareas=await db.list('tareas');renderDashboard();}
 }
 async function toggleTarea(id){const t=(cache.tareas||[]).find(x=>x.id===id);if(!t)return;const nv=!t.hecha;await db.update('tareas',id,{hecha:nv});t.hecha=nv;renderDashboard();}
-async function delTarea(id){await db.remove('tareas',id);cache.tareas=await db.list('tareas');renderDashboard();}
+async function delTarea(id){const src=(cache.tareas||[]).find(t=>t.id===id);const old=src?{...src}:null;await db.remove('tareas',id);cache.tareas=await db.list('tareas');if(old)recUndo(async()=>{await db.insert('tareas',old);cache.tareas=await db.list('tareas');renderDashboard();});renderDashboard();}
+function notaBox(amb,title){
+  const items=(cache.tareas||[]).filter(t=>t.prioridad===amb).sort((a,b)=>(!!a.hecha!==!!b.hecha)?(a.hecha?1:-1):0);
+  return `<div class="note-card"><h4>${title}</h4>
+    <input class="note-add" type="text" placeholder="Añadir nota…" onkeydown="if(event.key==='Enter')addNota('${amb}',this)">
+    <div>${items.map(t=>`<div class="note-item${t.hecha?' done':''}">
+      <input type="checkbox" class="note-check" ${t.hecha?'checked':''} onchange="toggleTarea('${t.id}')">
+      <span class="ntxt">${esc(t.texto)}</span>
+      <button class="nx" onclick="delTarea('${t.id}')" title="Borrar">✕</button>
+    </div>`).join('')||'<div style="color:var(--mut2);font-size:.84rem;padding:8px 2px">Sin notas aún.</div>'}</div>
+  </div>`;
+}
+async function addNota(amb,el){const texto=(el.value||'').trim();if(!texto)return;el.value='';const r=await db.insert('tareas',{texto,hecha:false,prioridad:amb,fecha:null,hora:null});if(r){cache.tareas=await db.list('tareas');recUndo(async()=>{await db.remove('tareas',r.id);cache.tareas=await db.list('tareas');renderDashboard();});renderDashboard();}}
 
 function renderDashboard(){
   const ideas=cache.ideas||[];
@@ -520,16 +548,10 @@ function renderDashboard(){
     <div class="stat"><div class="lbl">🎬 Reels activos</div><div class="val">${act.filter(i=>i.seccion==='reel').length}</div></div>
     <div class="stat"><div class="lbl">▶️ YouTube activos</div><div class="val">${act.filter(i=>i.seccion==='youtube').length}</div></div>
   </div>
-  <div class="widget" style="margin-bottom:16px">
-    <h3>✅ To-Do · Tareas prioritarias</h3>
-    <div class="todo-add">
-      <input type="text" id="todoInput" placeholder="Nueva tarea… (ej. Reunión vídeo Mercedes)" onkeydown="if(event.key==='Enter')addTarea()">
-      <input type="date" id="todoDate" class="sel" title="Fecha (opcional)">
-      <input type="time" id="todoTime" class="sel" title="Hora (opcional)">
-      <select id="todoPri" class="sel"><option value="alta">🔴 Alta</option><option value="media" selected>🟡 Media</option><option value="baja">🟢 Baja</option></select>
-      <button class="btn sm" onclick="addTarea()">+ Añadir</button>
-    </div>
-    <div class="wlist">${renderTareas()}</div>
+  <div class="notes-grid">
+    ${notaBox('freelance','💼 Freelance')}
+    ${notaBox('reels','🎬 Reels')}
+    ${notaBox('youtube','▶️ YouTube')}
   </div>
   <div class="widget" style="margin-bottom:16px">
     <h3>📅 Agenda · próximos eventos (de tu calendario Apple)</h3>
