@@ -142,6 +142,14 @@
   .note-check{appearance:none;-webkit-appearance:none;width:19px;height:19px;border:1.6px solid var(--mut2);border-radius:50%;cursor:pointer;flex:none;margin-top:1px;position:relative;transition:.12s}
   .note-check:checked{background:var(--accInk);border-color:var(--accInk)}
   .note-check:checked::after{content:'✓';position:absolute;color:#fff;font-size:.72rem;font-weight:700;left:3px;top:0}
+  .ref-list{display:flex;flex-direction:column;gap:8px}
+  .ref-row{display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:11px 14px}
+  .ref-ico{font-size:1.2rem;flex:none}
+  .ref-main{flex:1;min-width:0}
+  .ref-title{color:var(--txt);font-weight:600;font-size:.92rem;text-decoration:none;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ref-title:hover{color:var(--accInk)}
+  .ref-sub{font-size:.78rem;color:var(--mut2);margin-top:2px}
+  .ref-prof{font-size:.76rem;color:var(--accInk);text-decoration:none;border:1px solid var(--accbd);padding:4px 9px;border-radius:8px;flex:none;white-space:nowrap}
 
   /* DASHBOARD */
   .dash-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}
@@ -308,6 +316,7 @@
     <button data-sec="reel"><span class="ico">🎬</span> Reels <span class="count" id="c-reel">0</span></button>
     <button data-sec="youtube"><span class="ico">▶️</span> YouTube <span class="count" id="c-youtube">0</span></button>
     <button data-sec="recursos"><span class="ico">🧰</span> Recursos <span class="count" id="c-recursos">0</span></button>
+    <button data-sec="refs"><span class="ico">📚</span> Referencias <span class="count" id="c-refs">0</span></button>
     <button data-sec="finanzas"><span class="ico">💰</span> Finanzas</button>
   </nav>
   <div class="side-foot">
@@ -365,6 +374,7 @@ function updateCounts(){
   if(cr)cr.textContent=ideas.filter(i=>i.seccion==='reel').length;
   if(cy)cy.textContent=ideas.filter(i=>i.seccion==='youtube').length;
   if(crr)crr.textContent=(cache.recursos||[]).length;
+  const crf=document.getElementById('c-refs');if(crf)crf.textContent=(cache.referencias||[]).filter(r=>String(r.seccion||'').startsWith('hub_')).length;
 }
 /* migra registros antiguos (categoria youtube -> seccion, etc.) — solo local */
 function migrate(){
@@ -464,7 +474,7 @@ function catName(sec,cat){const c=SECTIONS[sec].cats[cat];return c?c[0]:cat;}
 /* ============================================================
    NAV
    ============================================================ */
-let SEC='dashboard', subTab={reel:'ideas',youtube:'ideas'}, ideaFilter={reel:'all',youtube:'all'}, viewMode={reel:'paneles',youtube:'paneles'};
+let SEC='dashboard', subTab={reel:'ideas',youtube:'ideas',refs:'reels'}, ideaFilter={reel:'all',youtube:'all'}, viewMode={reel:'paneles',youtube:'paneles'};
 document.getElementById('nav').addEventListener('click',e=>{
   const b=e.target.closest('button[data-sec]');if(!b)return;
   document.querySelectorAll('#nav button').forEach(x=>x.classList.remove('active'));b.classList.add('active');
@@ -482,6 +492,7 @@ function render(){
   saveUI();
   if(SEC==='dashboard')return renderDashboard();
   if(SEC==='recursos')return renderRecursos();
+  if(SEC==='refs')return renderReferenciasHub();
   if(SEC==='finanzas')return renderFinanzas();
   if(SEC==='reel'||SEC==='youtube')return renderSection(SEC);
 }
@@ -544,18 +555,11 @@ function renderDashboard(){
   ${CLOUD?'':`<div class="banner">⚠️ Estás en <b>modo local</b>. Para que perdure y sincronice, conecta Supabase en <b>⚙️ Conexión</b>.</div>`}
   <div class="stats-row">
     <div class="stat"><div class="lbl">✅ Tareas pendientes</div><div class="val">${pendTareas.length}</div></div>
-    <div class="stat"><div class="lbl">🔥 Para hoy</div><div class="val" style="color:var(--orange)">${hoyTareas.length}</div></div>
-    <div class="stat"><div class="lbl">🎬 Reels activos</div><div class="val">${act.filter(i=>i.seccion==='reel').length}</div></div>
-    <div class="stat"><div class="lbl">▶️ YouTube activos</div><div class="val">${act.filter(i=>i.seccion==='youtube').length}</div></div>
   </div>
   <div class="notes-grid">
     ${notaBox('freelance','💼 Freelance')}
     ${notaBox('reels','🎬 Reels')}
     ${notaBox('youtube','▶️ YouTube')}
-  </div>
-  <div class="widget" style="margin-bottom:16px">
-    <h3>📅 Agenda · próximos eventos (de tu calendario Apple)</h3>
-    <div class="wlist">${(()=>{const g={};eventos.forEach(e=>{const k=e.texto;if(!g[k])g[k]={texto:e.texto,min:e.fecha,max:e.fecha};if(e.fecha<g[k].min)g[k].min=e.fecha;if(e.fecha>g[k].max)g[k].max=e.fecha;});const ag=Object.values(g).filter(e=>e.max>=today).sort((a,b)=>a.min.localeCompare(b.min)).slice(0,8);return ag.map(e=>{const col=eventColor(e.texto);const lbl=e.min===e.max?(e.min===today?'Hoy':fdate(e.min)):fdate(e.min)+' – '+fdate(e.max);return `<div class="wrow"><span class="dot" style="margin:0;background:${col}"></span><span class="r-title">${esc(e.texto)}</span><span class="tag" style="${e.min===today?'color:var(--orange);border:1px solid #f59e0b44':''}">${lbl}</span></div>`;}).join('')||'<div style="color:var(--mut2);font-size:.84rem">Sin eventos próximos en tu calendario.</div>';})()}</div>
   </div>
   ${renderDashCalHTML()}
   <div class="dash-grid">
@@ -826,6 +830,29 @@ function renderRefs(sec){
       <div class="thumb-body"><h4>${esc(r.titulo)||'Sin título'}</h4><span>${esc(r.autor)||esc(r.plataforma)||''}</span></div></div>`).join(''):'<div class="empty">Añade tu primera referencia 👆</div>'}
   </div>`;
 }
+function renderReferenciasHub(){
+  const cats=[['reels','🎬 Reels'],['youtube','▶️ YouTube'],['perfiles','✨ Perfiles que me inspiran']];
+  const cur=subTab.refs||'reels';const curSec='hub_'+cur;
+  const items=(cache.referencias||[]).filter(r=>r.seccion===curSec);
+  const plIco={instagram:'📸',tiktok:'🎵',youtube:'▶️',reel:'📸',otro:'🔗'};
+  $('#main').innerHTML=`
+  <div class="pagehead"><div><h1>📚 Referencias</h1><p>Cuentas y vídeos que te inspiran, ordenados. Pásame links por el chat y los clasifico solos.</p></div>
+    <button class="btn" onclick="openForm('referencias',null,{seccion:'${curSec}'})">+ Añadir link</button></div>
+  <div class="sub-tabs">${cats.map(c=>`<button class="${cur===c[0]?'active':''}" onclick="subTab.refs='${c[0]}';render()">${c[1]}</button>`).join('')}</div>
+  <div class="ref-list">
+   ${items.length?items.map(r=>{const prof=(r.notas&&/^https?:/.test(r.notas))?r.notas:'';return `<div class="ref-row">
+      <span class="ref-ico">${plIco[r.plataforma]||'🔗'}</span>
+      <div class="ref-main">
+        <a href="${esc(r.url)}" target="_blank" rel="noopener" class="ref-title">${esc(r.titulo)||esc(r.url)}</a>
+        ${r.autor?`<div class="ref-sub">${esc(r.autor)}</div>`:'<div class="ref-sub" style="color:var(--orange)">perfil pendiente</div>'}
+      </div>
+      ${prof?`<a href="${esc(prof)}" target="_blank" rel="noopener" class="ref-prof" title="Perfil del creador">👤 perfil</a>`:''}
+      <button class="mini-btn" onclick="openForm('referencias','${r.id}')" title="Editar">✏️</button>
+      <button class="trow-x" onclick="delRef('${r.id}')" title="Borrar">🗑</button>
+   </div>`;}).join(''):'<div class="empty" style="padding:34px;color:var(--mut2);text-align:center">Aún no hay nada aquí. Pásame links por el chat y los ordeno, o usa "+ Añadir link".</div>'}
+  </div>`;
+}
+async function delRef(id){const src=(cache.referencias||[]).find(r=>r.id===id);const old=src?{...src}:null;await db.remove('referencias',id);cache.referencias=await db.list('referencias');if(old)recUndo(async()=>{await db.insert('referencias',old);cache.referencias=await db.list('referencias');render();});render();}
 function renderMiniaturas(){
   const items=cache.miniaturas||[];
   $('#secBody').innerHTML=`<div class="gal">
@@ -1279,7 +1306,7 @@ function renderFiscal(){
    ============================================================ */
 const FORMS={
   recursos:{title:'Recurso',fields:[['titulo','Título','text',1],['url','URL','text'],['tipo','Tipo','select',0,[['herramienta','Herramienta'],['preset','Preset'],['asset','Asset'],['link','Link'],['otro','Otro']]],['notas','Notas','textarea'],['tags','Tags (coma)','tags']]},
-  referencias:{title:'Referencia',fields:[['titulo','Título','text'],['url','URL','text'],['url_imagen','URL imagen/preview','text'],['plataforma','Plataforma','select',0,[['reel','Reel'],['youtube','YouTube'],['tiktok','TikTok'],['otro','Otro']]],['autor','Autor','text'],['notas','Notas','textarea'],['tags','Tags (coma)','tags']]},
+  referencias:{title:'Referencia',fields:[['titulo','Título','text'],['url','URL','text'],['url_imagen','URL imagen/preview','text'],['plataforma','Plataforma','select',0,[['instagram','Instagram'],['tiktok','TikTok'],['youtube','YouTube'],['otro','Otro']]],['autor','Autor','text'],['notas','Notas','textarea'],['tags','Tags (coma)','tags']]},
   miniaturas:{title:'Miniatura',fields:[['titulo','Título','text'],['url_imagen','URL de la imagen','text'],['fuente','Fuente / autor','text'],['url_video','URL del vídeo','text'],['notas','Notas','textarea'],['tags','Tags (coma)','tags']]},
   movimientos:{title:'Movimiento',fields:[['concepto','Concepto','text',1],['tipo','Tipo','select',0,[['ingreso','💚 Ingreso'],['gasto','❤️ Gasto']]],['importe','Importe BASE sin IVA (€)','number',1],['iva','IVA %','number'],['fecha','Fecha','date'],['cliente','Cliente / proveedor','text'],['categoria','Categoría','select',0,[['cliente','Cliente'],['software','Software'],['equipo','Equipo / material'],['impuestos','Impuestos'],['general','General']]],['estado','Estado','select',0,[['cobrado','Cobrado'],['pendiente','Pendiente'],['pagado','Pagado'],['previsto','Previsto']]],['amort','Es amortización (material >300€: se deduce en varios años)','check'],['amort_anios','Años de amortización','number'],['notas','Notas','textarea']]},
   impuestos:{title:'Impuesto',fields:[['modelo','Modelo','select',0,[['130','130 (IRPF)'],['303','303 (IVA)'],['390','390 (IVA anual)'],['100','100 (Renta)'],['otro','Otro']]],['periodo','Periodo','text',0,null,'ej: 2026-T2'],['importe','Importe (€)','number'],['fecha_limite','Fecha límite','date'],['pagado','¿Pagado?','check'],['notas','Notas','textarea']]},
