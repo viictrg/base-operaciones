@@ -338,6 +338,11 @@ const db={
     let a=JSON.parse(localStorage.getItem('baseops_'+t)||'[]');a=a.filter(r=>r.id!==id);localStorage.setItem('baseops_'+t,JSON.stringify(a)); }
 };
 async function refreshAll(){for(const t of TABLES){cache[t]=await db.list(t);}migrate();updateCounts();}
+/* ---- Deshacer global (Ctrl/Cmd+Z) a nivel de acción ---- */
+let undoStack=[],undoing=false;
+function recUndo(fn){if(undoing)return;undoStack.push(fn);if(undoStack.length>60)undoStack.shift();}
+async function appUndo(){if(undoing)return;const fn=undoStack.pop();if(!fn){toast('Nada que deshacer');return;}undoing=true;try{await fn();toast('Deshecho ↶');}catch(e){toast('No se pudo deshacer');}finally{undoing=false;}}
+function toast(msg){let t=document.getElementById('toast');if(!t){t=document.createElement('div');t.id='toast';t.style.cssText='position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1f2430;color:#fff;padding:9px 16px;border-radius:10px;font-size:.85rem;z-index:9999;opacity:0;transition:opacity .2s;pointer-events:none;box-shadow:0 6px 20px rgba(0,0,0,.35)';document.body.appendChild(t);}t.textContent=msg;t.style.opacity='1';clearTimeout(t._h);t._h=setTimeout(()=>t.style.opacity='0',1500);}
 function updateCounts(){
   const ideas=cache.ideas||[];
   const cr=document.getElementById('c-reel'),cy=document.getElementById('c-youtube'),crr=document.getElementById('c-recursos');
@@ -890,26 +895,32 @@ function reservaFor(ingArr,gas){
   return Math.max(0,ivaR-ivaS)+Math.max(0,(bIng-bGas-amY)*0.20-ret);
 }
 function fInput(id,field,val,type,w){const v=(val==null?'':esc(val));return `<input class="fcell" type="${type}" value="${v}" style="width:${w}px" onchange="finSet('${id}','${field}',this.value)">`;}
+function finNewFecha(){const q={'T1':'-02-15','T2':'-05-15','T3':'-08-15','T4':'-11-15'}[finPeriod];return q?(finYear+q):todayISO();}
 async function finSet(id,field,value){
   const m=(cache.movimientos||[]).find(x=>x.id===id);if(!m)return;
   if(['importe','iva','amort_anios'].includes(field))value=parseFloat(value)||0;
-  if(['factura','irpf','nota','hasta','desg'].includes(field)){const me=mMeta(m);me[field]=value;m.notas=JSON.stringify(me);await db.update('movimientos',id,{notas:m.notas});}
+  const isMeta=['factura','irpf','nota','hasta','desg'].includes(field);
+  const oldNotas=m.notas,oldVal=m[field];
+  if(isMeta){const me=mMeta(m);me[field]=value;m.notas=JSON.stringify(me);await db.update('movimientos',id,{notas:m.notas});}
   else{m[field]=value;await db.update('movimientos',id,{[field]:value});}
+  recUndo(async()=>{await db.update('movimientos',id,isMeta?{notas:oldNotas}:{[field]:oldVal});cache.movimientos=await db.list('movimientos');renderFinanzas();});
   renderFinanzas();
 }
-async function finAdd(tipo){const r=await db.insert('movimientos',{tipo,concepto:'',importe:0,iva:tipo==='ingreso'?0:21,fecha:todayISO(),estado:tipo==='ingreso'?'cobrado':'pagado',categoria:tipo==='ingreso'?'cliente':'general',amort:false,amort_anios:4,cliente:'',notas:'{}'});if(r){cache.movimientos=await db.list('movimientos');renderFinanzas();}}
-async function finDel(id){if(!confirm('¿Borrar esta fila?'))return;await db.remove('movimientos',id);cache.movimientos=await db.list('movimientos');renderFinanzas();}
-async function finAddFijo(){const r=await db.insert('movimientos',{tipo:'fijo',concepto:'',importe:0,iva:0,fecha:todayISO(),estado:'pendiente',categoria:'fijo',amort:false,amort_anios:4,cliente:'',notas:'{}'});if(r){cache.movimientos=await db.list('movimientos');renderFinanzas();}}
+async function finAdd(tipo){const r=await db.insert('movimientos',{tipo,concepto:'',importe:0,iva:tipo==='ingreso'?0:21,fecha:finNewFecha(),estado:tipo==='ingreso'?'cobrado':'pagado',categoria:tipo==='ingreso'?'cliente':'general',amort:false,amort_anios:4,cliente:'',notas:'{}'});if(r){cache.movimientos=await db.list('movimientos');recUndo(async()=>{await db.remove('movimientos',r.id);cache.movimientos=await db.list('movimientos');renderFinanzas();});renderFinanzas();}}
+async function finDel(id){if(!confirm('¿Borrar esta fila?'))return;const src=(cache.movimientos||[]).find(m=>m.id===id);const old=src?{...src}:null;await db.remove('movimientos',id);cache.movimientos=await db.list('movimientos');if(old)recUndo(async()=>{await db.insert('movimientos',old);cache.movimientos=await db.list('movimientos');renderFinanzas();});renderFinanzas();}
+async function finAddFijo(){const r=await db.insert('movimientos',{tipo:'fijo',concepto:'',importe:0,iva:0,fecha:todayISO(),estado:'pendiente',categoria:'fijo',amort:false,amort_anios:4,cliente:'',notas:'{}'});if(r){cache.movimientos=await db.list('movimientos');recUndo(async()=>{await db.remove('movimientos',r.id);cache.movimientos=await db.list('movimientos');renderFinanzas();});renderFinanzas();}}
 async function ensureCaja(){const r=await db.insert('movimientos',{tipo:'caja',concepto:'Saldo en cuenta',importe:0,iva:0,fecha:todayISO(),estado:'pagado',categoria:'caja',amort:false,amort_anios:4,cliente:'',notas:'{}'});if(r){cache.movimientos=await db.list('movimientos');renderFinanzas();}}
 function movOrd(m){const o=mMeta(m).orden;return(o===undefined||o===''||o===null)?1e9:Number(o);}
 function finCfg(){const c=(cache.movimientos||[]).find(m=>m.tipo==='config');const d={goal:50000,futuro:0,hacienda:0,gastoFut:0,renta:0};if(c){try{Object.assign(d,JSON.parse(c.notas||'{}'));}catch(e){}}return d;}
 async function finSetCfg(field,value){value=parseFloat(value)||0;let c=(cache.movimientos||[]).find(m=>m.tipo==='config');
   if(!c){await db.insert('movimientos',{tipo:'config',concepto:'config',importe:0,iva:0,fecha:todayISO(),estado:'pagado',categoria:'config',amort:false,amort_anios:4,cliente:'',notas:JSON.stringify({goal:50000,futuro:0,hacienda:0,gastoFut:0,renta:0})});cache.movimientos=await db.list('movimientos');c=(cache.movimientos).find(m=>m.tipo==='config');}
-  let d={goal:50000,futuro:0,hacienda:0,gastoFut:0,renta:0};try{Object.assign(d,JSON.parse(c.notas||'{}'));}catch(e){}d[field]=value;await db.update('movimientos',c.id,{notas:JSON.stringify(d)});cache.movimientos=await db.list('movimientos');renderFinanzas();}
+  const oldNotas=c.notas;
+  let d={goal:50000,futuro:0,hacienda:0,gastoFut:0,renta:0};try{Object.assign(d,JSON.parse(c.notas||'{}'));}catch(e){}d[field]=value;await db.update('movimientos',c.id,{notas:JSON.stringify(d)});cache.movimientos=await db.list('movimientos');recUndo(async()=>{await db.update('movimientos',c.id,{notas:oldNotas});cache.movimientos=await db.list('movimientos');renderFinanzas();});renderFinanzas();}
 let gfutOpen=false;
 async function cfgWrite(mut){let c=(cache.movimientos||[]).find(m=>m.tipo==='config');
   if(!c){await db.insert('movimientos',{tipo:'config',concepto:'config',importe:0,iva:0,fecha:todayISO(),estado:'pagado',categoria:'config',amort:false,amort_anios:4,cliente:'',notas:JSON.stringify({goal:50000,futuro:0,hacienda:0,gastoFut:0,renta:0,items:[]})});cache.movimientos=await db.list('movimientos');c=(cache.movimientos).find(m=>m.tipo==='config');}
-  let d={goal:50000,futuro:0,hacienda:0,gastoFut:0,renta:0,items:[]};try{Object.assign(d,JSON.parse(c.notas||'{}'));}catch(e){}if(!Array.isArray(d.items))d.items=[];mut(d);await db.update('movimientos',c.id,{notas:JSON.stringify(d)});cache.movimientos=await db.list('movimientos');renderFinanzas();}
+  const oldNotas=c.notas;
+  let d={goal:50000,futuro:0,hacienda:0,gastoFut:0,renta:0,items:[]};try{Object.assign(d,JSON.parse(c.notas||'{}'));}catch(e){}if(!Array.isArray(d.items))d.items=[];mut(d);await db.update('movimientos',c.id,{notas:JSON.stringify(d)});cache.movimientos=await db.list('movimientos');recUndo(async()=>{await db.update('movimientos',c.id,{notas:oldNotas});cache.movimientos=await db.list('movimientos');renderFinanzas();});renderFinanzas();}
 async function gfutAdd(){gfutOpen=true;await cfgWrite(d=>{d.items.push({c:'',v:0});});}
 async function gfutDel(i){gfutOpen=true;await cfgWrite(d=>{d.items.splice(i,1);});}
 async function gfutSet(i,field,value){gfutOpen=true;await cfgWrite(d=>{if(!d.items[i])return;d.items[i][field]=field==='v'?(parseFloat(value)||0):value;});}
@@ -986,9 +997,12 @@ async function gastoDrop(ev,targetId){ev.preventDefault();const dim=document.que
   let list=(cache.movimientos||[]).filter(m=>m.tipo==='gasto').sort((a,b)=>movOrd(a)-movOrd(b)||(a.fecha||'').localeCompare(b.fecha||''));
   const from=list.findIndex(m=>m.id===gDrag),to=list.findIndex(m=>m.id===targetId);
   if(from<0||to<0){gDrag=null;return;}
+  const snap=list.map(m=>({id:m.id,notas:m.notas}));
   const[mv]=list.splice(from,1);list.splice(to,0,mv);
   for(let i=0;i<list.length;i++){const m=list[i];const me=mMeta(m);me.orden=i;m.notas=JSON.stringify(me);await db.update('movimientos',m.id,{notas:m.notas});}
-  cache.movimientos=await db.list('movimientos');gDrag=null;renderFinanzas();}
+  cache.movimientos=await db.list('movimientos');gDrag=null;
+  recUndo(async()=>{for(const s of snap)await db.update('movimientos',s.id,{notas:s.notas});cache.movimientos=await db.list('movimientos');renderFinanzas();});
+  renderFinanzas();}
 function cajaPanel(){
   const mov=cache.movimientos||[];
   const caja=mov.find(m=>m.tipo==='caja');const cajaAmt=caja?Number(caja.importe)||0:0;
@@ -1284,6 +1298,15 @@ document.addEventListener('keydown',e=>{
   const mod=e.ctrlKey||e.metaKey;if(!mod)return;
   if((e.key==='z'||e.key==='Z')&&!e.shiftKey){e.preventDefault();undoEditor();}
   else if(((e.key==='z'||e.key==='Z')&&e.shiftKey)||e.key==='y'||e.key==='Y'){e.preventDefault();redoEditor();}
+});
+// Ctrl/Cmd+Z global: deshace la última acción. Dentro de un campo de texto deja el deshacer nativo (palabra a palabra).
+document.addEventListener('keydown',e=>{
+  const mod=e.ctrlKey||e.metaKey;if(!mod||(e.key!=='z'&&e.key!=='Z')||e.shiftKey)return;
+  if($('#overlay')&&$('#overlay').classList.contains('open'))return;       // modal con su propio flujo
+  if(editing&&$('#edBody'))return;                                          // editor de guiones ya lo gestiona
+  const el=document.activeElement;
+  if(el&&(el.tagName==='INPUT'||el.tagName==='TEXTAREA'||el.isContentEditable))return; // deshacer nativo del campo
+  e.preventDefault();appUndo();
 });
 
 /* ============================================================
