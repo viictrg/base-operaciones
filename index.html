@@ -142,6 +142,9 @@
   .note-check{appearance:none;-webkit-appearance:none;width:19px;height:19px;border:1.6px solid var(--mut2);border-radius:50%;cursor:pointer;flex:none;margin-top:1px;position:relative;transition:.12s}
   .note-check:checked{background:var(--accInk);border-color:var(--accInk)}
   .note-check:checked::after{content:'✓';position:absolute;color:#fff;font-size:.72rem;font-weight:700;left:3px;top:0}
+  .ref-quick{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:20px}
+  .ref-qbtn{display:inline-flex;align-items:center;gap:8px;background:var(--accbg);border:1px solid var(--accbd);color:var(--accInk);text-decoration:none;font-weight:700;font-size:.86rem;padding:11px 16px;border-radius:11px;transition:.14s}
+  .ref-qbtn:hover{background:var(--accInk);color:#fff;transform:translateY(-1px)}
   .ref-block{margin-bottom:18px}
   .ref-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:10px}
   .ref-h h3{font-size:.95rem;font-weight:800;letter-spacing:.2px}
@@ -861,6 +864,11 @@ function renderReferenciasHub(){
   const empty=t=>`<div style="color:var(--mut2);font-size:.84rem;padding:14px 2px">${t}</div>`;
   $('#main').innerHTML=`
   <div class="pagehead"><div><h1>📚 Referencias</h1><p>Todo a la vista. Pásame links por el chat y los clasifico solos.</p></div></div>
+  <div class="ref-quick">
+    <a class="ref-qbtn" href="https://www.instagram.com/victorapolo/saved/" target="_blank" rel="noopener">📸 Guardados de Instagram</a>
+    <a class="ref-qbtn" href="https://www.youtube.com/playlist?list=WL" target="_blank" rel="noopener">▶️ Ver más tarde · YouTube</a>
+    <a class="ref-qbtn" href="https://www.tiktok.com/" target="_blank" rel="noopener">🎵 Favoritos · TikTok</a>
+  </div>
   <div class="ref-block">
     <div class="ref-h"><h3>✨ Perfiles que me inspiran</h3><button class="btn sm" onclick="openForm('referencias',null,{seccion:'hub_perfiles'})">+ perfil</button></div>
     <div class="ref-profiles">${perfiles.length?perfiles.map(refProfChip).join(''):empty('Pásame links de cuentas que te inspiran.')}</div>
