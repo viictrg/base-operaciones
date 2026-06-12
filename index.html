@@ -983,8 +983,8 @@ function renderReferenciasHub(){
     <a class="ref-qbtn" href="https://www.tiktok.com/@victorapolo_" target="_blank" rel="noopener">🎵 TikTok</a>
   </div>
   <div class="ref-block">
-    <div class="ref-h"><h3>Perfiles que me inspiran</h3><button class="btn ghost sm" onclick="openForm('referencias',null,{seccion:'hub_perfiles'})">+ a mano</button></div>
-    <div class="ref-profiles">${perfiles.length?perfiles.map(refProfChip).join(''):empty('Copia el link de una cuenta y dale a «Añadir link copiado».')}</div>
+    <div class="ref-h"><h3>Perfiles que me inspiran</h3><span style="font-size:.74rem;color:var(--mut2)">se añaden solos con cada vídeo que guardas</span></div>
+    <div class="ref-profiles">${perfiles.length?perfiles.map(refProfChip).join(''):empty('Guarda un vídeo y su canal aparecerá aquí solo.')}</div>
   </div>
   <div class="ref-block">
     <div class="ref-h"><h3>YouTube</h3></div>
@@ -1024,20 +1024,30 @@ function handleFromUrl(url,plat){
   if(plat==='tiktok'){const m=url.match(/tiktok\.com\/(@[\w.\-]+)/i);if(m)return m[1];}
   if(plat==='youtube'){const m=url.match(/youtube\.com\/(@[\w.\-]+)/i);if(m)return m[1];}
   return '';}
+async function ensureProfile(autor,purl,plat){
+  if(!autor)return;
+  const norm=s=>(s||'').toLowerCase().replace(/^@/,'').trim();
+  const ya=(cache.referencias||[]).some(r=>r.seccion==='hub_perfiles'&&(norm(r.autor)===norm(autor)||(purl&&r.url===purl)));
+  if(ya)return;
+  await db.insert('referencias',{seccion:'hub_perfiles',plataforma:plat||'youtube',titulo:autor,autor,url:purl||'',url_imagen:'',notas:'auto · del vídeo guardado',tags:[]});
+  cache.referencias=await db.list('referencias');
+}
 async function saveRefUrl(url){
   const d=refDest(url);
   const row={seccion:d.sec,plataforma:d.plat,url,titulo:'',autor:handleFromUrl(url,d.plat),url_imagen:'',notas:'',tags:[]};
+  let meta=null;
   if(d.plat!=='instagram'){ // noembed no cubre Instagram
     try{
       const r=await fetch('https://noembed.com/embed?url='+encodeURIComponent(url));
       const j=await r.json();
-      if(j&&!j.error){if(d.sec!=='hub_perfiles')row.titulo=j.title||'';row.autor=j.author_name||row.autor;if(j.thumbnail_url)row.url_imagen=j.thumbnail_url;}
+      if(j&&!j.error){meta=j;if(d.sec!=='hub_perfiles')row.titulo=j.title||'';row.autor=j.author_name||row.autor;if(j.thumbnail_url)row.url_imagen=j.thumbnail_url;}
     }catch(e){}
   }
   if(!row.url_imagen&&d.plat==='youtube'){const id=ytId(url);if(id)row.url_imagen='https://img.youtube.com/vi/'+id+'/hqdefault.jpg';}
   const ins=await db.insert('referencias',row);
   cache.referencias=await db.list('referencias');
   if(ins)recUndo(async()=>{await db.remove('referencias',ins.id);cache.referencias=await db.list('referencias');updateCounts();render();});
+  if(d.sec==='hub_youtube'&&row.autor)await ensureProfile(row.autor,(meta&&meta.author_url)||'',d.plat); // el canal entra solo en Perfiles
   updateCounts();render();
   const dest={hub_reels:'Reels',hub_youtube:'YouTube',hub_perfiles:'Perfiles'}[d.sec]||'Referencias';
   if(d.plat==='instagram'&&d.sec==='hub_reels')toast(`Guardado en ${dest} ✓ — portada y texto se cargan de Instagram`);
