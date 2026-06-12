@@ -236,7 +236,9 @@
   .cal-nav:hover{border-color:var(--accInk)}
   .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
   .cal-dow{font-size:.68rem;text-transform:uppercase;letter-spacing:.5px;color:var(--mut2);text-align:center;padding:4px 0}
-  .cal-cell{background:var(--card);border:1px solid var(--line);border-radius:9px;min-height:96px;padding:6px;transition:.12s;display:flex;flex-direction:column;gap:4px}
+  .cal-cell{background:var(--card);border:1px solid var(--line);border-radius:9px;height:118px;overflow:hidden;padding:6px;transition:.12s;display:flex;flex-direction:column;gap:4px}
+  .cal-chip.more{background:var(--inset);border-color:var(--mut2);color:var(--mut);cursor:pointer;flex-shrink:0}
+  .cal-chip.more:hover{color:var(--txt)}
   .cal-cell.other{opacity:.35}
   .cal-cell.today{border-color:var(--accInk)}
   .cal-cell.drop{border-color:var(--accInk);background:var(--accbg)}
@@ -349,7 +351,7 @@
     .stat .val{font-size:1.25rem}
     .fin-stats .val.xl{font-size:1.5rem}
     .widget{padding:14px}
-    .cal-cell{min-height:58px}
+    .cal-cell{height:auto;min-height:58px;overflow:visible}
     .cal-chip{font-size:.62rem;padding:2px 5px}
     th,td{padding:8px 9px;font-size:.8rem}
     .fcell{font-size:.78rem;padding:4px 6px}
@@ -732,6 +734,21 @@ function addTareaOn(ds){
   $('#overlay').classList.add('open');
   setTimeout(()=>{const i=$('#tm_txt');if(i)i.focus();},60);
 }
+/* Detalle del día (al pulsar "+N más") */
+function openDayModal(ds){
+  const evs=(cache.tareas||[]).filter(t=>t.prioridad==='evento'&&t.fecha===ds);
+  const ts=(cache.tareas||[]).filter(t=>t.fecha===ds&&t.prioridad!=='evento');
+  const ids=(cache.ideas||[]).filter(i=>i.fecha_pub===ds);
+  $('#modal').innerHTML=`<h3 style="text-transform:capitalize">${new Date(ds).toLocaleDateString('es-ES',{weekday:'long',day:'numeric',month:'long'})}</h3>
+   <div class="wlist">
+   ${evs.map(e=>`<div class="trow"><span class="dot" style="margin:0;background:${eventColor(e.texto)}"></span><span class="ttext">${esc(e.texto)}</span><span class="tag">evento</span></div>`).join('')}
+   ${ids.map(i=>`<div class="trow" style="cursor:pointer" onclick="closeModal();openIdeaFrom('${i.id}')"><span class="dot" style="margin:0;background:${catColor(i.seccion,i.categoria)}"></span><span class="ttext">${esc(i.titulo)||'Sin título'}</span>${badge(SECTIONS[i.seccion].name,catColor(i.seccion,i.categoria))}</div>`).join('')}
+   ${ts.map(t=>`<div class="trow${t.hecha?' done':''}"><input type="checkbox" ${t.hecha?'checked':''} onchange="toggleTarea('${t.id}')"><span class="ttext">${esc(t.texto)}</span>${t.hora?`<span class="tag">${t.hora}</span>`:''}<button class="trow-x" onclick="delTarea('${t.id}');closeModal()" title="Borrar">✕</button></div>`).join('')}
+   ${(!evs.length&&!ids.length&&!ts.length)?'<div style="color:var(--mut2);font-size:.85rem">Nada este día.</div>':''}
+   </div>
+   <div class="modal-actions"><button class="btn ghost" onclick="closeModal()">Cerrar</button><button class="btn" onclick="closeModal();addTareaOn('${ds}')">＋ Añadir tarea</button></div>`;
+  $('#overlay').classList.add('open');
+}
 async function saveTareaModal(ds){
   const txt=($('#tm_txt').value||'').trim();if(!txt){closeModal();return;}
   const hora=$('#tm_hora').value||null,pri=$('#tm_pri').value||'media';
@@ -766,10 +783,15 @@ function renderDashCalHTML(){
     for(let c=0;c<7;c++){
       const ds=wd[c];
       if(!ds){cellsW+='<div class="cal-cell other"></div>';continue;}
-      const dn=Number(ds.slice(8,10)); let chips='';
-      ideas.filter(i=>i.fecha_pub===ds).forEach(i=>{const c2=catColor(i.seccion,i.categoria);chips+=`<div class="cal-chip" draggable="true" ondragstart="draggedId='${i.id}';draggedKind='idea';event.stopPropagation()" onclick="event.stopPropagation();openIdeaFrom('${i.id}')" style="background:${c2}22;border-color:${c2};color:${c2}" title="${esc(i.titulo)} · arrastra para mover">${esc(i.titulo)||'Sin título'}</div>`;});
-      tareas.filter(t=>t.fecha===ds&&t.prioridad!=='evento').forEach(t=>{chips+=`<div class="cal-chip" draggable="true" ondragstart="draggedId='${t.id}';draggedKind='tarea';event.stopPropagation()" onclick="event.stopPropagation();toggleTarea('${t.id}')" style="background:var(--accbg);border-color:var(--accbd);color:var(--accInk);${t.hecha?'text-decoration:line-through;opacity:.55':''}" title="${esc(t.texto)} · clic: hecha/pendiente · arrastra para mover">${esc(t.texto)}</div>`;});
-      creds.filter(r=>credParse(r).dia===dn).forEach(r=>{chips+=`<div class="cal-chip" style="background:var(--inset);border-color:var(--mut2);color:var(--mut);cursor:default" title="Renueva créditos">💳 ${esc(r.titulo)}</div>`;});
+      const dn=Number(ds.slice(8,10)); const arrC=[];
+      ideas.filter(i=>i.fecha_pub===ds).forEach(i=>{const c2=catColor(i.seccion,i.categoria);arrC.push(`<div class="cal-chip" draggable="true" ondragstart="draggedId='${i.id}';draggedKind='idea';event.stopPropagation()" onclick="event.stopPropagation();openIdeaFrom('${i.id}')" style="background:${c2}22;border-color:${c2};color:${c2}" title="${esc(i.titulo)} · arrastra para mover">${esc(i.titulo)||'Sin título'}</div>`);});
+      tareas.filter(t=>t.fecha===ds&&t.prioridad!=='evento').forEach(t=>{arrC.push(`<div class="cal-chip" draggable="true" ondragstart="draggedId='${t.id}';draggedKind='tarea';event.stopPropagation()" onclick="event.stopPropagation();toggleTarea('${t.id}')" style="background:var(--accbg);border-color:var(--accbd);color:var(--accInk);${t.hecha?'text-decoration:line-through;opacity:.55':''}" title="${esc(t.texto)} · clic: hecha/pendiente · arrastra para mover">${esc(t.texto)}</div>`);});
+      creds.filter(r=>credParse(r).dia===dn).forEach(r=>{arrC.push(`<div class="cal-chip" style="background:var(--inset);border-color:var(--mut2);color:var(--mut);cursor:default" title="Renueva créditos">💳 ${esc(r.titulo)}</div>`);});
+      // celda de altura FIJA: se muestran las fichas que caben y el resto va a "+N más"
+      const avail=118-26-reserve, maxN=Math.max(0,Math.floor(avail/20));
+      let shown=arrC,extra=0;
+      if(arrC.length>maxN){const keep=Math.max(0,maxN-1);shown=arrC.slice(0,keep);extra=arrC.length-keep;}
+      const chips=shown.join('')+(extra?`<div class="cal-chip more" onclick="event.stopPropagation();openDayModal('${ds}')" title="Ver todo el día">+${extra} más</div>`:'');
       cellsW+=`<div class="cal-cell ${ds===today?'today':''}" onclick="addTareaOn('${ds}')" ondragover="event.preventDefault();this.classList.add('drop')" ondragleave="this.classList.remove('drop')" ondrop="agDrop(event,'${ds}',this)" title="Clic: nueva tarea · suelta aquí una idea para programarla"><div class="cal-daynum">${dn}</div>${reserve?`<div style="height:${reserve}px;flex:none"></div>`:''}${chips}</div>`;
     }
     // Barras de evento (continuas)
