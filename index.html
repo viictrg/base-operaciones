@@ -405,6 +405,7 @@
     <button onclick="openConfig()" style="display:flex;align-items:center;gap:10px;background:none;border:none;color:var(--mut);font-size:.8rem;padding:8px 10px;border-radius:7px;cursor:pointer;width:100%;font-family:inherit">
       <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 13.5a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.03 1.56V20a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1.11-1.56 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.56-1.03H4a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.56-1.11 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34h.08A1.7 1.7 0 0 0 11.12 4.1V4a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87v.08a1.7 1.7 0 0 0 1.56 1.03H22a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.56 1.03z" transform="scale(.88) translate(1.6 1.6)"/></svg></span> Conexión <span class="sync-dot sync-local" id="syncDot"></span>
     </button>
+    <div id="syncInfo" style="font-size:.68rem;color:var(--mut2);padding:2px 10px 6px"></div>
     <button onclick="logout()" style="display:flex;align-items:center;gap:10px;background:none;border:none;color:var(--mut);font-size:.8rem;padding:8px 10px;border-radius:7px;cursor:pointer;width:100%;font-family:inherit">
       <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h5a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-5M4 12h11M11 8l4 4-4 4" transform="translate(-1 0)"/></svg></span> Cerrar sesión
     </button>
@@ -1655,18 +1656,21 @@ async function loginGoogle(){if(!sb)return;await sb.auth.signInWithOAuth({provid
 async function logout(){if(sb){try{await sb.auth.signOut();}catch(e){}}location.reload();}
 async function startApp(){const sb1=document.querySelector('.sidebar');if(sb1)sb1.style.display='';const mt=document.querySelector('.mobile-top');if(mt)mt.style.display='';$('#main').style.maxWidth='';loadUI();setNavActive();await refreshAll();render();}
 
-/* Auto-refresco: al volver a la pestaña + sondeo cada 30 s mientras esté visible */
+/* Auto-refresco: al volver a la pestaña + sondeo cada 30 s (siempre activo) */
 let lastSync=Date.now();
+function markSync(){const el=document.getElementById('syncInfo');if(el)el.textContent='Actualizado '+new Date().toLocaleTimeString('es-ES');}
 async function softRefresh(force){
   if(!CLOUD||!authUser)return;
   if(!force&&Date.now()-lastSync<4000)return;   // anti-rebote
-  if(editing)return;                             // no interrumpir el editor
+  if(editing)return;                             // no interrumpir el editor de guiones
+  const ae=document.activeElement;               // no borrar lo que estés escribiendo
+  if(ae&&/^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName))return;
   lastSync=Date.now();
-  await refreshAll();render();
+  await refreshAll();render();markSync();
 }
 window.addEventListener('focus',()=>softRefresh());
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)softRefresh();});
-setInterval(()=>{if(!document.hidden)softRefresh();},30000);
+setInterval(()=>softRefresh(),30000);
 
 /* BOOT */
 (async function(){
