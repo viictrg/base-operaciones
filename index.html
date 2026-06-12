@@ -1655,6 +1655,18 @@ async function loginGoogle(){if(!sb)return;await sb.auth.signInWithOAuth({provid
 async function logout(){if(sb){try{await sb.auth.signOut();}catch(e){}}location.reload();}
 async function startApp(){const sb1=document.querySelector('.sidebar');if(sb1)sb1.style.display='';const mt=document.querySelector('.mobile-top');if(mt)mt.style.display='';$('#main').style.maxWidth='';loadUI();setNavActive();await refreshAll();render();}
 
+/* Auto-refresco al volver a la pestaña (p. ej. tras guardar desde la extensión) */
+let lastSync=Date.now();
+async function softRefresh(){
+  if(!CLOUD||!authUser)return;
+  if(Date.now()-lastSync<15000)return;      // máx. una vez cada 15 s
+  if(editing)return;                         // no interrumpir el editor
+  lastSync=Date.now();
+  await refreshAll();render();
+}
+window.addEventListener('focus',softRefresh);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)softRefresh();});
+
 /* BOOT */
 (async function(){
   applyTheme();
