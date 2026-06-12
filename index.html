@@ -134,6 +134,7 @@
   .notes-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:16px}
   @media(max-width:900px){.notes-grid{grid-template-columns:1fr}}
   .note-card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:15px 17px;display:flex;flex-direction:column;min-height:190px}
+  .note-card.drag-over{border-color:var(--accbd);background:var(--accbg)}
   .note-card h4{font-size:.95rem;font-weight:800;margin-bottom:11px;display:flex;align-items:center;gap:7px;letter-spacing:.2px}
   .note-add{width:100%;background:transparent;border:none;border-bottom:1px solid var(--line);color:var(--txt);font-size:.92rem;padding:7px 2px;margin-bottom:6px;outline:none}
   .note-add:focus{border-bottom-color:var(--accInk)}
@@ -533,9 +534,9 @@ const amortAnual=m=>(Number(m.importe)||0)/(Number(m.amort_anios)||4);
 function irpfEstimate(base){const b=Math.max(0,base);const tr=[[12450,.19],[20200,.24],[35200,.30],[60000,.37],[300000,.45],[Infinity,.47]];let prev=0,tax=0;for(const[lim,r]of tr){const amt=Math.min(b,lim)-prev;if(amt>0)tax+=amt*r;prev=lim;if(b<=lim)break;}return tax;}
 
 const SECTIONS={
-  reel:{label:'Reels',name:'Reels',tabs:['ideas','calendario'],
+  reel:{label:'Reels',name:'Reels',tabs:['ideas'],
     cats:{organico:['Orgánico','#f472b6'],colaboracion:['Colaboración','#a78bfa']}},
-  youtube:{label:'YouTube',name:'YouTube',tabs:['ideas','calendario'],
+  youtube:{label:'YouTube',name:'YouTube',tabs:['ideas'],
     cats:{tutorial:['Tutorial','#38bdf8'],lifestyle:['Lifestyle','#4ade80'],opinion:['Opinión','#f59e0b']}},
 };
 const EST={idea:['Idea','#98989f'],proceso:['Guion','#ff9f0a'],grabado:['Grabado','#409cff'],publicado:['Publicado','#30d158']};
@@ -679,26 +680,43 @@ function weekStripHTML(){
   return `<div class="week-strip">${cells}</div>`;
 }
 function renderAgenda(){
-  const pend=(cache.ideas||[]).filter(i=>!i.fecha_pub&&i.estado!=='publicado');
-  const grupo=sec=>{
-    const list=pend.filter(i=>i.seccion===sec);
-    return `<h3 style="margin-top:14px">${SECTIONS[sec].name} <span style="color:var(--mut2);font-weight:500">${list.length}</span></h3>
-    ${list.length?list.map(i=>`<div class="cal-pend" draggable="true" ondragstart="draggedId='${i.id}'" onclick="openIdeaFrom('${i.id}')" style="border-color:${catColor(i.seccion,i.categoria)}" title="${esc(i.titulo)} · arrastra a un día">${esc(i.titulo)||'Sin título'}</div>`).join(''):'<div style="color:var(--mut2);font-size:.76rem;padding:4px 0 8px">Nada sin programar 🎉</div>'}`;
+  const dropAttrs=`ondragover="event.preventDefault();this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')" ondrop="this.classList.remove('drag-over');agUnschedule()"`;
+  const colIdeas=sec=>{
+    const list=(cache.ideas||[]).filter(i=>i.seccion===sec&&!i.fecha_pub&&(i.estado==='proceso'||i.estado==='grabado'));
+    return `<div class="note-card" ${dropAttrs}>
+      <h4>${SECTIONS[sec].name} <span style="color:var(--mut2);font-weight:500;font-size:.8rem">listas para programar</span></h4>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        ${list.length?list.map(i=>{const e=EST[i.estado];return `<div class="cal-pend" style="margin:0;display:flex;align-items:center;gap:8px;border-color:${catColor(sec,i.categoria)}" draggable="true" ondragstart="draggedId='${i.id}';draggedKind='idea'" onclick="openIdeaFrom('${i.id}')" title="${esc(i.titulo)} · arrastra a un día"><span style="flex:1;overflow:hidden;text-overflow:ellipsis">${esc(i.titulo)||'Sin título'}</span>${badge(e[0],e[1])}</div>`;}).join(''):`<div style="color:var(--mut2);font-size:.8rem;line-height:1.5">Cuando muevas una idea a <b>Guion</b> o <b>Grabado</b> en el tablero de ${SECTIONS[sec].name}, aparecerá aquí.</div>`}
+      </div></div>`;
   };
+  const apuntes=(cache.tareas||[]).filter(t=>t.prioridad==='agenda'&&!t.fecha&&!t.hecha);
   $('#main').innerHTML=`
-  <div class="pagehead"><div><h1>Agenda</h1><p>Eventos, tareas y publicaciones. Arrastra ideas al calendario para programarlas.</p></div></div>
-  <div class="cal-wrap">
-    <div>${renderDashCalHTML()}</div>
-    <div class="cal-side" ondragover="event.preventDefault();this.classList.add('drop')" ondragleave="this.classList.remove('drop')" ondrop="this.classList.remove('drop');agUnschedule()">
-      <h3>📥 Sin programar</h3>
-      <div style="font-size:.72rem;color:var(--mut2);line-height:1.5;margin-bottom:8px">Arrastra una idea a un día para programarla. Suéltala aquí de vuelta para desprogramarla.</div>
-      ${grupo('reel')}
-      ${grupo('youtube')}
-    </div>
+  <div class="pagehead"><div><h1>Agenda</h1><p>Tu centro de planificación. Arrastra apuntes e ideas a un día; suéltalos de vuelta para desprogramarlos.</p></div></div>
+  ${renderDashCalHTML()}
+  <div class="notes-grid" style="margin-top:2px">
+    <div class="note-card" ${dropAttrs}>
+      <h4>📝 Apuntes</h4>
+      <input class="note-add" type="text" placeholder="Apunta algo y arrástralo a un día…" onkeydown="if(event.key==='Enter')addApunte(this)">
+      <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">
+        ${apuntes.length?apuntes.map(t=>`<div class="cal-pend" style="margin:0;display:flex;align-items:center;gap:8px;border-color:var(--accInk)" draggable="true" ondragstart="draggedId='${t.id}';draggedKind='tarea'" title="Arrastra a un día"><span style="flex:1;overflow:hidden;text-overflow:ellipsis">${esc(t.texto)}</span><button class="trow-x" onclick="delTarea('${t.id}')" title="Borrar">✕</button></div>`).join(''):'<div style="color:var(--mut2);font-size:.8rem">Escribe arriba y pulsa Enter.</div>'}
+      </div></div>
+    ${colIdeas('youtube')}
+    ${colIdeas('reel')}
   </div>`;
 }
-async function agDrop(ev,ds,el){ev.preventDefault();if(el)el.classList.remove('drop');if(!draggedId)return;await setPubDate(draggedId,ds);draggedId=null;toast('Programado para '+fdate(ds)+' ✓');}
-async function agUnschedule(){if(!draggedId)return;await setPubDate(draggedId,null);draggedId=null;toast('Idea desprogramada');}
+async function addApunte(el){const texto=(el.value||'').trim();if(!texto)return;el.value='';const r=await db.insert('tareas',{texto,hecha:false,prioridad:'agenda',fecha:null,hora:null});if(r){cache.tareas=await db.list('tareas');recUndo(async()=>{await db.remove('tareas',r.id);cache.tareas=await db.list('tareas');render();});render();}}
+async function agDrop(ev,ds,el){
+  ev.preventDefault();if(el)el.classList.remove('drop');if(!draggedId)return;
+  if(draggedKind==='tarea'){const t=(cache.tareas||[]).find(x=>x.id===draggedId);if(t){await db.update('tareas',t.id,{fecha:ds});t.fecha=ds;}render();toast('Apuntado el '+fdate(ds)+' ✓');}
+  else{await setPubDate(draggedId,ds);toast('Programado para '+fdate(ds)+' ✓');}
+  draggedId=null;draggedKind=null;
+}
+async function agUnschedule(){
+  if(!draggedId)return;
+  if(draggedKind==='tarea'){const t=(cache.tareas||[]).find(x=>x.id===draggedId);if(t){await db.update('tareas',t.id,{fecha:null});t.fecha=null;}render();}
+  else await setPubDate(draggedId,null);
+  draggedId=null;draggedKind=null;toast('Devuelto a la lista');
+}
 let dashCal=new Date(); dashCal.setDate(1);
 function dashCalMove(n){dashCal.setMonth(dashCal.getMonth()+n);render();}
 function dashCalToday(){dashCal=new Date();dashCal.setDate(1);render();}
@@ -749,8 +767,8 @@ function renderDashCalHTML(){
       const ds=wd[c];
       if(!ds){cellsW+='<div class="cal-cell other"></div>';continue;}
       const dn=Number(ds.slice(8,10)); let chips='';
-      ideas.filter(i=>i.fecha_pub===ds).forEach(i=>{const c2=catColor(i.seccion,i.categoria);chips+=`<div class="cal-chip" draggable="true" ondragstart="draggedId='${i.id}';event.stopPropagation()" onclick="event.stopPropagation();openIdeaFrom('${i.id}')" style="background:${c2}22;border-color:${c2};color:${c2}" title="${esc(i.titulo)} · arrastra para mover">${esc(i.titulo)||'Sin título'}</div>`;});
-      tareas.filter(t=>t.fecha===ds&&t.prioridad!=='evento').forEach(t=>{chips+=`<div class="cal-chip" onclick="event.stopPropagation();toggleTarea('${t.id}')" style="background:var(--accbg);border-color:var(--accbd);color:var(--accInk);${t.hecha?'text-decoration:line-through;opacity:.55':''}" title="${esc(t.texto)}">${esc(t.texto)}</div>`;});
+      ideas.filter(i=>i.fecha_pub===ds).forEach(i=>{const c2=catColor(i.seccion,i.categoria);chips+=`<div class="cal-chip" draggable="true" ondragstart="draggedId='${i.id}';draggedKind='idea';event.stopPropagation()" onclick="event.stopPropagation();openIdeaFrom('${i.id}')" style="background:${c2}22;border-color:${c2};color:${c2}" title="${esc(i.titulo)} · arrastra para mover">${esc(i.titulo)||'Sin título'}</div>`;});
+      tareas.filter(t=>t.fecha===ds&&t.prioridad!=='evento').forEach(t=>{chips+=`<div class="cal-chip" draggable="true" ondragstart="draggedId='${t.id}';draggedKind='tarea';event.stopPropagation()" onclick="event.stopPropagation();toggleTarea('${t.id}')" style="background:var(--accbg);border-color:var(--accbd);color:var(--accInk);${t.hecha?'text-decoration:line-through;opacity:.55':''}" title="${esc(t.texto)} · clic: hecha/pendiente · arrastra para mover">${esc(t.texto)}</div>`;});
       creds.filter(r=>credParse(r).dia===dn).forEach(r=>{chips+=`<div class="cal-chip" style="background:var(--inset);border-color:var(--mut2);color:var(--mut);cursor:default" title="Renueva créditos">💳 ${esc(r.titulo)}</div>`;});
       cellsW+=`<div class="cal-cell ${ds===today?'today':''}" onclick="addTareaOn('${ds}')" ondragover="event.preventDefault();this.classList.add('drop')" ondragleave="this.classList.remove('drop')" ondrop="agDrop(event,'${ds}',this)" title="Clic: nueva tarea · suelta aquí una idea para programarla"><div class="cal-daynum">${dn}</div>${reserve?`<div style="height:${reserve}px;flex:none"></div>`:''}${chips}</div>`;
     }
@@ -777,13 +795,12 @@ function renderSection(sec){
   const S=SECTIONS[sec];let tab=subTab[sec];
   if(!S.tabs.includes(tab)){tab=subTab[sec]='ideas';}
   $('#main').innerHTML=`
-  <div class="pagehead"><div><h1>${S.label}</h1><p>Tus ideas, guiones y planificación de ${S.name}.</p></div>
-    ${tab==='ideas'?`<button class="btn" onclick="newIdea('${sec}')">+ Nueva idea</button>`:''}
+  <div class="pagehead"><div><h1>${S.label}</h1><p>Tus ideas y guiones de ${S.name}. Se programan desde la Agenda.</p></div>
+    <button class="btn" onclick="newIdea('${sec}')">+ Nueva idea</button>
   </div>
-  <div class="sub-tabs">${S.tabs.map(t=>`<button class="${tab===t?'active':''}" onclick="subTab['${sec}']='${t}';render()">${TABNAME[t]}</button>`).join('')}</div>
+  ${S.tabs.length>1?`<div class="sub-tabs">${S.tabs.map(t=>`<button class="${tab===t?'active':''}" onclick="subTab['${sec}']='${t}';render()">${TABNAME[t]}</button>`).join('')}</div>`:''}
   <div id="secBody"></div>`;
-  if(tab==='ideas')renderIdeaList(sec);
-  else if(tab==='calendario')renderCalendar(sec);
+  renderIdeaList(sec);
 }
 
 const byOrden=(a,b)=>{const ao=(a.orden==null?1e9:a.orden),bo=(b.orden==null?1e9:b.orden);if(ao!==bo)return ao-bo;return (b.created_at||'').localeCompare(a.created_at||'');};
@@ -952,48 +969,8 @@ async function quickUpdate(id,field,value){await db.update('ideas',id,{[field]:v
 /* ============================================================
    CALENDAR
    ============================================================ */
-let calCursor=new Date();calCursor.setDate(1);
-let draggedId=null;
-function renderCalendar(sec){
-  const S=SECTIONS[sec];
-  const y=calCursor.getFullYear(),m=calCursor.getMonth();
-  const monthName=calCursor.toLocaleDateString('es-ES',{month:'long',year:'numeric'});
-  const first=new Date(y,m,1);let startDow=(first.getDay()+6)%7; // lunes=0
-  const daysInMonth=new Date(y,m+1,0).getDate();
-  const todayStr=ymd(new Date().getFullYear(),new Date().getMonth(),new Date().getDate());
-  const ideas=(cache.ideas||[]).filter(i=>i.seccion===sec);
-  const byDate={};ideas.filter(i=>i.fecha_pub).forEach(i=>{(byDate[i.fecha_pub]=byDate[i.fecha_pub]||[]).push(i);});
-  const pend=ideas.filter(i=>!i.fecha_pub);
-  const dows=['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
-  let cells='';
-  for(let k=0;k<startDow;k++)cells+=`<div class="cal-cell other"></div>`;
-  for(let d=1;d<=daysInMonth;d++){
-    const ds=ymd(y,m,d);const list=byDate[ds]||[];
-    cells+=`<div class="cal-cell ${ds===todayStr?'today':''}" data-date="${ds}" ondragover="calOver(event,this)" ondragleave="this.classList.remove('drop')" ondrop="calDrop(event,'${ds}',this)">
-      <div class="cal-daynum">${d}</div>
-      ${list.map(i=>`<div class="cal-chip" draggable="true" ondragstart="draggedId='${i.id}'" onclick="openEditor('${i.id}')" style="background:${catColor(sec,i.categoria)}22;border-color:${catColor(sec,i.categoria)};color:${catColor(sec,i.categoria)}" title="${esc(i.titulo)}">${esc(i.titulo)||'Sin título'}</div>`).join('')}
-    </div>`;
-  }
-  $('#secBody').innerHTML=`
-  <div class="cal-legend">${Object.entries(S.cats).map(([k,v])=>`<span><i style="background:${v[1]}"></i>${v[0]}</span>`).join('')}</div>
-  <div class="cal-wrap">
-    <div>
-      <div class="cal-head"><button class="cal-nav" onclick="calMove(-1)">‹</button><h2 style="text-transform:capitalize">${monthName}</h2><button class="cal-nav" onclick="calMove(1)">›</button><button class="btn ghost sm" onclick="calToday()">Hoy</button></div>
-      <div class="cal-grid">${dows.map(d=>`<div class="cal-dow">${d}</div>`).join('')}${cells}</div>
-    </div>
-    <div class="cal-side" id="calSide" ondragover="event.preventDefault();this.classList.add('drop')" ondragleave="this.classList.remove('drop')" ondrop="calUnschedule(event,this)">
-      <h3>📥 Sin programar (${pend.length})</h3>
-      ${pend.length?pend.map(i=>`<div class="cal-pend" draggable="true" ondragstart="draggedId='${i.id}'" onclick="openEditor('${i.id}')" style="border-color:${catColor(sec,i.categoria)}" title="Arrastra a un día">${esc(i.titulo)||'Sin título'}</div>`).join(''):'<div style="color:var(--mut2);font-size:.78rem">Todo programado 🎉</div>'}
-      <div style="font-size:.72rem;color:var(--mut2);margin-top:12px;line-height:1.5">Arrastra una idea a un día para programar su publicación. Arrástrala aquí para desprogramar.</div>
-    </div>
-  </div>`;
-}
-function calOver(e,el){e.preventDefault();el.classList.add('drop');}
-async function calDrop(e,ds,el){e.preventDefault();el.classList.remove('drop');if(!draggedId)return;await setPubDate(draggedId,ds);draggedId=null;}
-async function calUnschedule(e,el){e.preventDefault();el.classList.remove('drop');if(!draggedId)return;await setPubDate(draggedId,null);draggedId=null;}
-async function setPubDate(id,ds){await db.update('ideas',id,{fecha_pub:ds});const r=(cache.ideas||[]).find(x=>x.id===id);if(r)r.fecha_pub=ds;if(!editing&&(SEC==='reel'||SEC==='youtube')&&subTab[SEC]==='calendario')renderCalendar(SEC);else render();}
-function calMove(n){calCursor.setMonth(calCursor.getMonth()+n);renderCalendar(SEC);}
-function calToday(){calCursor=new Date();calCursor.setDate(1);renderCalendar(SEC);}
+let draggedId=null,draggedKind=null;
+async function setPubDate(id,ds){await db.update('ideas',id,{fecha_pub:ds});const r=(cache.ideas||[]).find(x=>x.id===id);if(r)r.fecha_pub=ds;render();}
 
 /* ============================================================
    REFERENCIAS (por sección) + MINIATURAS
