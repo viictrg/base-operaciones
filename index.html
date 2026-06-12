@@ -273,6 +273,16 @@
   .banner b{color:var(--accInk)}
   code{background:var(--inset);border:1px solid var(--line);padding:1px 6px;border-radius:5px;font-size:.8rem}
   a{color:var(--accInk)}
+  /* REFERENCIAS · tarjetas grandes YouTube */
+  .yt-grid{display:flex;flex-direction:column;gap:14px}
+  .ytcard{background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden;box-shadow:var(--shadow-sm);transition:.15s}
+  .ytcard:hover{border-color:var(--mut2);box-shadow:var(--shadow)}
+  .ytcard .yimg{display:flex;align-items:center;justify-content:center;aspect-ratio:16/9;background:var(--inset) center/cover no-repeat;color:var(--mut2);font-size:2rem;text-decoration:none}
+  .ytcard .ybody{padding:10px 12px;display:flex;gap:8px;align-items:flex-start}
+  .ytcard .ytitle{font-size:.92rem;font-weight:600;line-height:1.35;color:var(--txt);text-decoration:none;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word}
+  .ytcard .ytitle:hover{color:var(--accInk)}
+  .ytcard .ysub{font-size:.76rem;color:var(--mut);margin-top:3px}
+
   /* KANBAN */
   .kb{display:grid;grid-template-columns:repeat(4,minmax(200px,1fr));gap:12px;align-items:stretch}
   @media(max-width:1100px){.kb{grid-template-columns:repeat(2,1fr)}}
@@ -443,7 +453,7 @@ function updateCounts(){
   if(cr)cr.textContent=ideas.filter(i=>i.seccion==='reel').length;
   if(cy)cy.textContent=ideas.filter(i=>i.seccion==='youtube').length;
   if(crr)crr.textContent=(cache.recursos||[]).length;
-  const crf=document.getElementById('c-refs');if(crf)crf.textContent=(cache.referencias||[]).filter(r=>String(r.seccion||'').startsWith('hub_')).length;
+  const crf=document.getElementById('c-refs');if(crf)crf.textContent=(cache.referencias||[]).filter(r=>['hub_reels','hub_youtube','hub_perfiles','reel','youtube'].includes(r.seccion)).length;
   const cg=document.getElementById('c-guiones');if(cg)cg.textContent=(cache.ideas||[]).filter(i=>(i.contenido||'').trim()).length;
 }
 /* migra registros antiguos (categoria youtube -> seccion, etc.) — solo local */
@@ -522,9 +532,9 @@ const amortAnual=m=>(Number(m.importe)||0)/(Number(m.amort_anios)||4);
 function irpfEstimate(base){const b=Math.max(0,base);const tr=[[12450,.19],[20200,.24],[35200,.30],[60000,.37],[300000,.45],[Infinity,.47]];let prev=0,tax=0;for(const[lim,r]of tr){const amt=Math.min(b,lim)-prev;if(amt>0)tax+=amt*r;prev=lim;if(b<=lim)break;}return tax;}
 
 const SECTIONS={
-  reel:{label:'Reels',name:'Reels',tabs:['ideas','calendario','referencias'],
+  reel:{label:'Reels',name:'Reels',tabs:['ideas','calendario'],
     cats:{organico:['Orgánico','#f472b6'],colaboracion:['Colaboración','#a78bfa']}},
-  youtube:{label:'YouTube',name:'YouTube',tabs:['ideas','calendario','miniaturas','referencias'],
+  youtube:{label:'YouTube',name:'YouTube',tabs:['ideas','calendario','miniaturas'],
     cats:{tutorial:['Tutorial','#38bdf8'],lifestyle:['Lifestyle','#4ade80'],opinion:['Opinión','#f59e0b']}},
 };
 const EST={idea:['Idea','#98989f'],proceso:['Guion','#ff9f0a'],grabado:['Grabado','#409cff'],publicado:['Publicado','#30d158']};
@@ -729,18 +739,17 @@ function renderDashCalHTML(){
    ============================================================ */
 function renderSection(sec){
   if(editing){return renderEditor();}
-  const S=SECTIONS[sec],tab=subTab[sec];
+  const S=SECTIONS[sec];let tab=subTab[sec];
+  if(!S.tabs.includes(tab)){tab=subTab[sec]='ideas';}
   $('#main').innerHTML=`
   <div class="pagehead"><div><h1>${S.label}</h1><p>Tus ideas, guiones y planificación de ${S.name}.</p></div>
     ${tab==='ideas'?`<button class="btn" onclick="newIdea('${sec}')">+ Nueva idea</button>`:''}
-    ${tab==='referencias'?`<button class="btn" onclick="openForm('referencias',null,{seccion:'${sec}'})">+ Referencia</button>`:''}
     ${tab==='miniaturas'?`<button class="btn" onclick="openForm('miniaturas')">+ Miniatura</button>`:''}
   </div>
   <div class="sub-tabs">${S.tabs.map(t=>`<button class="${tab===t?'active':''}" onclick="subTab['${sec}']='${t}';render()">${TABNAME[t]}</button>`).join('')}</div>
   <div id="secBody"></div>`;
   if(tab==='ideas')renderIdeaList(sec);
   else if(tab==='calendario')renderCalendar(sec);
-  else if(tab==='referencias')renderRefs(sec);
   else if(tab==='miniaturas')renderMiniaturas();
 }
 
@@ -956,14 +965,6 @@ function calToday(){calCursor=new Date();calCursor.setDate(1);renderCalendar(SEC
 /* ============================================================
    REFERENCIAS (por sección) + MINIATURAS
    ============================================================ */
-function renderRefs(sec){
-  const items=(cache.referencias||[]).filter(r=>r.seccion===sec);
-  $('#secBody').innerHTML=`<div class="gal">
-    ${items.length?items.map(r=>`<div class="thumb ref" onclick="openForm('referencias','${r.id}')">
-      <div class="img" style="${r.url_imagen?`background-image:url('${esc(r.url_imagen)}')`:''}">${r.url_imagen?'':'🎬'}</div>
-      <div class="thumb-body"><h4>${esc(r.titulo)||'Sin título'}</h4><span>${esc(r.autor)||esc(r.plataforma)||''}</span></div></div>`).join(''):'<div class="empty">Añade tu primera referencia 👆</div>'}
-  </div>`;
-}
 function ytId(u){const m=(u||'').match(/(?:v=|youtu\.be\/|embed\/|shorts\/)([\w-]{11})/);return m?m[1]:'';}
 function refThumb(r){if(r.plataforma==='youtube'){const id=ytId(r.url);if(id)return 'https://img.youtube.com/vi/'+id+'/hqdefault.jpg';}return r.url_imagen||'';}
 const PLICO={instagram:'📸',tiktok:'🎵',youtube:'▶️',reel:'📸',otro:'🔗'};
@@ -979,58 +980,91 @@ function refCard(r){const prof=(r.notas&&/^https?:/.test(r.notas))?r.notas:'';co
 function refProfChip(r){return `<div class="ref-chip"><span>${PLICO[r.plataforma]||'🔗'}</span><a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.autor)||esc(r.titulo)||esc(r.url)}</a><button class="trow-x" onclick="delRef('${r.id}')" title="Borrar">✕</button></div>`;}
 function renderReferenciasHub(){
   const refs=cache.referencias||[];
-  const reels=refs.filter(r=>r.seccion==='hub_reels');
-  const yt=refs.filter(r=>r.seccion==='hub_youtube');
+  const reels=refs.filter(r=>r.seccion==='hub_reels'||r.seccion==='reel');
+  const yt=refs.filter(r=>r.seccion==='hub_youtube'||r.seccion==='youtube');
   const perfiles=refs.filter(r=>r.seccion==='hub_perfiles');
   const empty=t=>`<div style="color:var(--mut2);font-size:.84rem;padding:14px 2px">${t}</div>`;
   $('#main').innerHTML=`
-  <div class="pagehead"><div><h1>Referencias</h1><p>Pega un link y se guarda solo con miniatura, título y autor. También puedes pasármelos por el chat.</p></div></div>
-  <div class="swipe-bar">
-    <input id="swipeUrl" type="text" placeholder="Pega un link de YouTube / Instagram / TikTok…" onkeydown="if(event.key==='Enter')quickSaveRef()">
-    <input id="swipeNote" type="text" placeholder="¿Por qué lo guardas? (opcional)" onkeydown="if(event.key==='Enter')quickSaveRef()" style="flex:0 1 260px">
-    <button class="btn" onclick="quickSaveRef()">Guardar</button>
-  </div>
+  <div class="pagehead"><div><h1>Referencias</h1><p>Copia un link en YouTube, Instagram o TikTok y pulsa el botón: se clasifica y se importa solo.</p></div>
+    <button class="btn" id="pasteBtn" onclick="addLinkFromClipboard()">＋ Añadir link copiado</button></div>
   <div class="ref-quick">
     <a class="ref-qbtn" href="https://www.instagram.com/victorapolo_/saved/" target="_blank" rel="noopener">📸 Guardados de Instagram</a>
     <a class="ref-qbtn" href="https://www.youtube.com/feed/playlists" target="_blank" rel="noopener">▶️ Playlists · YouTube</a>
     <a class="ref-qbtn" href="https://www.tiktok.com/@victorapolo_" target="_blank" rel="noopener">🎵 TikTok</a>
   </div>
   <div class="ref-block">
-    <div class="ref-h"><h3>Perfiles que me inspiran</h3><button class="btn sm" onclick="openForm('referencias',null,{seccion:'hub_perfiles'})">+ perfil</button></div>
-    <div class="ref-profiles">${perfiles.length?perfiles.map(refProfChip).join(''):empty('Pásame links de cuentas que te inspiran.')}</div>
+    <div class="ref-h"><h3>Perfiles que me inspiran</h3><button class="btn ghost sm" onclick="openForm('referencias',null,{seccion:'hub_perfiles'})">+ a mano</button></div>
+    <div class="ref-profiles">${perfiles.length?perfiles.map(refProfChip).join(''):empty('Copia el link de una cuenta y dale a «Añadir link copiado».')}</div>
   </div>
   <div class="ref-cols">
-    <div class="ref-block"><div class="ref-h"><h3>Reels</h3><button class="btn sm" onclick="openForm('referencias',null,{seccion:'hub_reels'})">+ link</button></div>
-      <div class="ref-grid">${reels.length?reels.map(refCard).join(''):empty('Aún no hay reels guardados.')}</div></div>
-    <div class="ref-block"><div class="ref-h"><h3>YouTube</h3><button class="btn sm" onclick="openForm('referencias',null,{seccion:'hub_youtube'})">+ link</button></div>
-      <div class="ref-grid">${yt.length?yt.map(refCard).join(''):empty('Aún no hay vídeos guardados.')}</div></div>
+    <div class="ref-block"><div class="ref-h"><h3>Reels</h3></div>
+      <div class="ref-grid">${reels.length?reels.map(refCard).join(''):empty('Copia el link de un reel y dale a «Añadir link copiado».')}</div></div>
+    <div class="ref-block"><div class="ref-h"><h3>YouTube</h3></div>
+      <div class="yt-grid">${yt.length?yt.map(ytCard).join(''):empty('Copia el link de un vídeo y dale a «Añadir link copiado».')}</div></div>
   </div>`;
 }
+function ytCard(r){const img=refThumb(r);
+  return `<div class="ytcard">
+    <a class="yimg" href="${esc(r.url)}" target="_blank" rel="noopener" style="${img?`background-image:url('${esc(img)}')`:''}">${img?'':'▶'}</a>
+    <div class="ybody">
+      <div style="flex:1;min-width:0">
+        <a class="ytitle" href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.titulo)||esc(r.url)}</a>
+        <div class="ysub">${esc(r.autor)||''}${r.notas&&!/^https?:/.test(r.notas)?(r.autor?' · ':'')+esc(r.notas):''}</div>
+      </div>
+      <button class="mini-btn" onclick="openForm('referencias','${r.id}')" title="Editar">✏️</button>
+      <button class="trow-x" onclick="delRef('${r.id}')" title="Borrar">🗑</button>
+    </div></div>`;}
 async function delRef(id){const src=(cache.referencias||[]).find(r=>r.id===id);const old=src?{...src}:null;await db.remove('referencias',id);cache.referencias=await db.list('referencias');if(old)recUndo(async()=>{await db.insert('referencias',old);cache.referencias=await db.list('referencias');render();});render();}
-/* ---- Swipe file: guardado rápido por URL ---- */
+/* ---- Importar link desde el portapapeles ---- */
 function refDest(u){const s=(u||'').toLowerCase();
-  if(/youtu\.be|youtube\.com/.test(s))return /shorts\//.test(s)?{sec:'hub_reels',plat:'youtube'}:{sec:'hub_youtube',plat:'youtube'};
-  if(/instagram\.com/.test(s))return{sec:'hub_reels',plat:'instagram'};
-  if(/tiktok\.com/.test(s))return{sec:'hub_reels',plat:'tiktok'};
+  if(/youtu\.be\/|youtube\.com/.test(s)){
+    if(/\/shorts\//.test(s))return{sec:'hub_reels',plat:'youtube'};
+    if(/watch\?|youtu\.be\/|\/embed\//.test(s))return{sec:'hub_youtube',plat:'youtube'};
+    return{sec:'hub_perfiles',plat:'youtube'};                      // canal @usuario
+  }
+  if(/instagram\.com/.test(s)){
+    if(/\/(reel|reels|p|tv)\//.test(s))return{sec:'hub_reels',plat:'instagram'};
+    return{sec:'hub_perfiles',plat:'instagram'};                    // perfil
+  }
+  if(/tiktok\.com/.test(s)){
+    if(/\/video\/|\/photo\//.test(s))return{sec:'hub_reels',plat:'tiktok'};
+    return{sec:'hub_perfiles',plat:'tiktok'};                       // perfil
+  }
   return{sec:'hub_youtube',plat:'otro'};}
-async function quickSaveRef(){
-  const inp=document.getElementById('swipeUrl'),ni=document.getElementById('swipeNote');
-  const url=(inp&&inp.value||'').trim();
-  if(!/^https?:\/\//.test(url)){toast('Pega un link válido (http…)');return;}
+function handleFromUrl(url,plat){
+  if(plat==='instagram'){const m=url.match(/instagram\.com\/([\w.\-]+)\/?/i);if(m&&!['reel','reels','p','tv','stories','explore'].includes(m[1].toLowerCase()))return '@'+m[1];}
+  if(plat==='tiktok'){const m=url.match(/tiktok\.com\/(@[\w.\-]+)/i);if(m)return m[1];}
+  if(plat==='youtube'){const m=url.match(/youtube\.com\/(@[\w.\-]+)/i);if(m)return m[1];}
+  return '';}
+async function saveRefUrl(url){
   const d=refDest(url);
-  const row={seccion:d.sec,plataforma:d.plat,url,titulo:'',autor:'',url_imagen:'',notas:(ni&&ni.value||'').trim(),tags:[]};
-  toast('Guardando…');
-  try{
-    const r=await fetch('https://noembed.com/embed?url='+encodeURIComponent(url));
-    const j=await r.json();
-    if(j&&!j.error){row.titulo=j.title||'';row.autor=j.author_name||'';if(j.thumbnail_url)row.url_imagen=j.thumbnail_url;}
-  }catch(e){}
+  const row={seccion:d.sec,plataforma:d.plat,url,titulo:'',autor:handleFromUrl(url,d.plat),url_imagen:'',notas:'',tags:[]};
+  if(d.plat!=='instagram'){ // noembed no cubre Instagram
+    try{
+      const r=await fetch('https://noembed.com/embed?url='+encodeURIComponent(url));
+      const j=await r.json();
+      if(j&&!j.error){if(d.sec!=='hub_perfiles')row.titulo=j.title||'';row.autor=j.author_name||row.autor;if(j.thumbnail_url)row.url_imagen=j.thumbnail_url;}
+    }catch(e){}
+  }
   if(!row.url_imagen&&d.plat==='youtube'){const id=ytId(url);if(id)row.url_imagen='https://img.youtube.com/vi/'+id+'/hqdefault.jpg';}
   const ins=await db.insert('referencias',row);
   cache.referencias=await db.list('referencias');
-  if(ins)recUndo(async()=>{await db.remove('referencias',ins.id);cache.referencias=await db.list('referencias');render();});
+  if(ins)recUndo(async()=>{await db.remove('referencias',ins.id);cache.referencias=await db.list('referencias');updateCounts();render();});
   updateCounts();render();
-  toast(row.titulo?'Guardado ✓ '+(d.sec==='hub_reels'?'(Reels)':'(YouTube)'):'Guardado — título pendiente (pídeme que lo complete)');
+  const dest={hub_reels:'Reels',hub_youtube:'YouTube',hub_perfiles:'Perfiles'}[d.sec]||'Referencias';
+  toast(row.titulo||row.autor?`Guardado en ${dest} ✓`:`Guardado en ${dest} — título pendiente (pídeme que lo complete)`);
+}
+async function addLinkFromClipboard(){
+  const btn=document.getElementById('pasteBtn');
+  if(btn){btn.disabled=true;btn.textContent='Importando…';}
+  let txt='';
+  try{txt=await navigator.clipboard.readText();}catch(e){}
+  let m=(txt||'').match(/https?:\/\/\S+/);
+  if(!m){const p=prompt('No he podido leer el portapapeles. Pega el link aquí:')||'';m=p.match(/https?:\/\/\S+/);}
+  if(!m){toast('No hay ningún link copiado');render();return;}
+  const url=m[0].replace(/[)\].,;'"]+$/,'');
+  if((cache.referencias||[]).some(r=>r.url===url)){toast('Ese link ya está guardado');render();return;}
+  await saveRefUrl(url);
 }
 /* ============================================================
    BIBLIOTECA DE GUIONES (vista sobre ideas con contenido)
