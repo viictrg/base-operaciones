@@ -350,6 +350,20 @@
     .fin-stats,.dash-grid{grid-template-columns:1fr}
     .fin-stats .b2{grid-column:span 1}
   }
+  /* ---- Swipe file + Biblioteca de Guiones ---- */
+  .swipe-bar{display:flex;gap:8px;margin:0 0 18px;flex-wrap:wrap}
+  .swipe-bar input,.swipe-bar select{background:var(--card);border:1px solid var(--line);border-radius:9px;padding:9px 12px;color:var(--txt);font-size:.86rem;font-family:inherit;outline:none}
+  .swipe-bar input{flex:1;min-width:180px}
+  .swipe-bar input:focus{border-color:var(--accbd)}
+  .swipe-bar select{flex:0 0 auto;cursor:pointer}
+  .ref-note{font-size:.74rem;color:var(--mut);margin-top:4px;line-height:1.35}
+  .guion-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:12px}
+  .guion-card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;cursor:pointer;transition:border-color .15s,transform .15s;box-shadow:var(--shadow-sm)}
+  .guion-card:hover{border-color:var(--accbd);transform:translateY(-1px)}
+  .guion-card h4{font-size:.95rem;margin:8px 0 6px;color:var(--txt)}
+  .guion-card p{font-size:.78rem;color:var(--mut);line-height:1.45;max-height:5.8em;overflow:hidden}
+  .guion-top{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  .guion-dur{margin-left:auto;font-size:.7rem;color:var(--mut2);white-space:nowrap}
 </style>
 </head>
 <body>
@@ -371,6 +385,7 @@
     <button data-sec="youtube"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m10 8.6 5.2 3.4-5.2 3.4z"/></svg></span> YouTube <span class="count" id="c-youtube">0</span></button>
     <button data-sec="recursos"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 6.5a4 4 0 0 1 5-5l-2.8 2.8 3 3L22.5 4.5a4 4 0 0 1-5 5L9 18a2.1 2.1 0 0 1-3-3z" transform="translate(-1.5 1.5) scale(.92)"/></svg></span> Recursos <span class="count" id="c-recursos">0</span></button>
     <button data-sec="refs"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4.5L5 21V4a1 1 0 0 1 1-1z"/></svg></span> Referencias <span class="count" id="c-refs">0</span></button>
+    <button data-sec="guiones"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h8l4 4v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M15 3v4h4M9.5 12h5M9.5 16h5"/></svg></span> Guiones <span class="count" id="c-guiones">0</span></button>
     <button data-sec="finanzas"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-9M21 20H3.5"/></svg></span> Finanzas</button>
   </nav>
   <div class="side-foot">
@@ -429,6 +444,7 @@ function updateCounts(){
   if(cy)cy.textContent=ideas.filter(i=>i.seccion==='youtube').length;
   if(crr)crr.textContent=(cache.recursos||[]).length;
   const crf=document.getElementById('c-refs');if(crf)crf.textContent=(cache.referencias||[]).filter(r=>String(r.seccion||'').startsWith('hub_')).length;
+  const cg=document.getElementById('c-guiones');if(cg)cg.textContent=(cache.ideas||[]).filter(i=>(i.contenido||'').trim()).length;
 }
 /* migra registros antiguos (categoria youtube -> seccion, etc.) — solo local */
 function migrate(){
@@ -550,6 +566,7 @@ function render(){
   if(SEC==='agenda')return renderAgenda();
   if(SEC==='recursos')return renderRecursos();
   if(SEC==='refs')return renderReferenciasHub();
+  if(SEC==='guiones')return renderGuionesLib();
   if(SEC==='finanzas')return renderFinanzas();
   if(SEC==='reel'||SEC==='youtube')return renderSection(SEC);
 }
@@ -956,6 +973,7 @@ function refCard(r){const prof=(r.notas&&/^https?:/.test(r.notas))?r.notas:'';co
     <div class="ref-cbody">
       <a href="${esc(r.url)}" target="_blank" rel="noopener" class="ref-title">${esc(r.titulo)||esc(r.url)}</a>
       ${r.autor?`<div class="ref-sub">${esc(r.autor)}</div>`:'<div class="ref-sub" style="color:var(--orange)">título/perfil pendiente</div>'}
+      ${(r.notas&&!/^https?:/.test(r.notas))?`<div class="ref-note">📝 ${esc(r.notas)}</div>`:''}
       <div class="ref-actions">${prof?`<a href="${esc(prof)}" target="_blank" rel="noopener" class="ref-prof">👤 perfil</a>`:''}<button class="mini-btn" onclick="openForm('referencias','${r.id}')" title="Editar">✏️</button><button class="trow-x" onclick="delRef('${r.id}')" title="Borrar">🗑</button></div>
     </div></div>`;}
 function refProfChip(r){return `<div class="ref-chip"><span>${PLICO[r.plataforma]||'🔗'}</span><a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.autor)||esc(r.titulo)||esc(r.url)}</a><button class="trow-x" onclick="delRef('${r.id}')" title="Borrar">✕</button></div>`;}
@@ -966,7 +984,12 @@ function renderReferenciasHub(){
   const perfiles=refs.filter(r=>r.seccion==='hub_perfiles');
   const empty=t=>`<div style="color:var(--mut2);font-size:.84rem;padding:14px 2px">${t}</div>`;
   $('#main').innerHTML=`
-  <div class="pagehead"><div><h1>Referencias</h1><p>Todo a la vista. Pásame links por el chat y los clasifico solos.</p></div></div>
+  <div class="pagehead"><div><h1>Referencias</h1><p>Pega un link y se guarda solo con miniatura, título y autor. También puedes pasármelos por el chat.</p></div></div>
+  <div class="swipe-bar">
+    <input id="swipeUrl" type="text" placeholder="Pega un link de YouTube / Instagram / TikTok…" onkeydown="if(event.key==='Enter')quickSaveRef()">
+    <input id="swipeNote" type="text" placeholder="¿Por qué lo guardas? (opcional)" onkeydown="if(event.key==='Enter')quickSaveRef()" style="flex:0 1 260px">
+    <button class="btn" onclick="quickSaveRef()">Guardar</button>
+  </div>
   <div class="ref-quick">
     <a class="ref-qbtn" href="https://www.instagram.com/victorapolo_/saved/" target="_blank" rel="noopener">📸 Guardados de Instagram</a>
     <a class="ref-qbtn" href="https://www.youtube.com/feed/playlists" target="_blank" rel="noopener">▶️ Playlists · YouTube</a>
@@ -984,6 +1007,69 @@ function renderReferenciasHub(){
   </div>`;
 }
 async function delRef(id){const src=(cache.referencias||[]).find(r=>r.id===id);const old=src?{...src}:null;await db.remove('referencias',id);cache.referencias=await db.list('referencias');if(old)recUndo(async()=>{await db.insert('referencias',old);cache.referencias=await db.list('referencias');render();});render();}
+/* ---- Swipe file: guardado rápido por URL ---- */
+function refDest(u){const s=(u||'').toLowerCase();
+  if(/youtu\.be|youtube\.com/.test(s))return /shorts\//.test(s)?{sec:'hub_reels',plat:'youtube'}:{sec:'hub_youtube',plat:'youtube'};
+  if(/instagram\.com/.test(s))return{sec:'hub_reels',plat:'instagram'};
+  if(/tiktok\.com/.test(s))return{sec:'hub_reels',plat:'tiktok'};
+  return{sec:'hub_youtube',plat:'otro'};}
+async function quickSaveRef(){
+  const inp=document.getElementById('swipeUrl'),ni=document.getElementById('swipeNote');
+  const url=(inp&&inp.value||'').trim();
+  if(!/^https?:\/\//.test(url)){toast('Pega un link válido (http…)');return;}
+  const d=refDest(url);
+  const row={seccion:d.sec,plataforma:d.plat,url,titulo:'',autor:'',url_imagen:'',notas:(ni&&ni.value||'').trim(),tags:[]};
+  toast('Guardando…');
+  try{
+    const r=await fetch('https://noembed.com/embed?url='+encodeURIComponent(url));
+    const j=await r.json();
+    if(j&&!j.error){row.titulo=j.title||'';row.autor=j.author_name||'';if(j.thumbnail_url)row.url_imagen=j.thumbnail_url;}
+  }catch(e){}
+  if(!row.url_imagen&&d.plat==='youtube'){const id=ytId(url);if(id)row.url_imagen='https://img.youtube.com/vi/'+id+'/hqdefault.jpg';}
+  const ins=await db.insert('referencias',row);
+  cache.referencias=await db.list('referencias');
+  if(ins)recUndo(async()=>{await db.remove('referencias',ins.id);cache.referencias=await db.list('referencias');render();});
+  updateCounts();render();
+  toast(row.titulo?'Guardado ✓ '+(d.sec==='hub_reels'?'(Reels)':'(YouTube)'):'Guardado — título pendiente (pídeme que lo complete)');
+}
+/* ============================================================
+   BIBLIOTECA DE GUIONES (vista sobre ideas con contenido)
+   ============================================================ */
+let guionUI={sec:'all',q:''};
+function renderGuionesLib(){
+  $('#main').innerHTML=`
+  <div class="pagehead"><div><h1>Guiones</h1><p>Todos los guiones que viven dentro de tus ideas, en un solo sitio. Clic para abrir el editor.</p></div></div>
+  <div class="swipe-bar">
+    <input id="guionQ" type="text" placeholder="Buscar en títulos y guiones…" value="${esc(guionUI.q)}" oninput="guionUI.q=this.value;updateGuionGrid()">
+    <select onchange="guionUI.sec=this.value;updateGuionGrid()">
+      <option value="all"${guionUI.sec==='all'?' selected':''}>Todo</option>
+      <option value="reel"${guionUI.sec==='reel'?' selected':''}>Reels</option>
+      <option value="youtube"${guionUI.sec==='youtube'?' selected':''}>YouTube</option>
+    </select>
+  </div>
+  <div id="guionGrid" class="guion-grid"></div>`;
+  updateGuionGrid();
+}
+function updateGuionGrid(){
+  const box=document.getElementById('guionGrid');if(!box)return;
+  const q=(guionUI.q||'').toLowerCase();
+  let items=(cache.ideas||[]).filter(i=>(i.contenido||'').trim())
+    .filter(i=>(guionUI.sec==='all'||i.seccion===guionUI.sec))
+    .filter(i=>!q||(i.titulo||'').toLowerCase().includes(q)||(i.contenido||'').toLowerCase().includes(q));
+  items.sort((a,b)=>String(b.updated_at||b.created_at||'').localeCompare(String(a.updated_at||a.created_at||'')));
+  const wc=t=>t.trim().split(/\s+/).filter(Boolean).length;
+  const dur=w=>{const s=Math.round(w/2.6);return s<60?'~'+s+' s':'~'+Math.floor(s/60)+' min '+(s%60)+' s';};
+  box.innerHTML=items.length?items.map(i=>{
+    const w=wc(i.contenido);const e=EST[i.estado]||EST.idea;
+    const sc=SECTIONS[i.seccion]?catColor(i.seccion,i.categoria):'#7a7a82';
+    const sn=SECTIONS[i.seccion]?SECTIONS[i.seccion].name:(i.seccion||'');
+    const snippet=i.contenido.trim().replace(/\s+/g,' ').slice(0,180);
+    return `<div class="guion-card" onclick="openIdeaFrom('${i.id}')">
+      <div class="guion-top">${badge(sn,sc)}${badge(e[0],e[1])}<span class="guion-dur">${w} palabras · ${dur(w)}</span></div>
+      <h4>${esc(i.titulo)||'Sin título'}</h4>
+      <p>${esc(snippet)}${i.contenido.trim().length>180?'…':''}</p>
+    </div>`;}).join(''):'<div class="empty">No hay guiones todavía. Escribe el guion dentro de una idea (Reels o YouTube) y aparecerá aquí solo.</div>';
+}
 function renderMiniaturas(){
   const items=cache.miniaturas||[];
   $('#secBody').innerHTML=`<div class="gal">
