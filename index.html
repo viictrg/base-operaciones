@@ -535,7 +535,7 @@ function irpfEstimate(base){const b=Math.max(0,base);const tr=[[12450,.19],[2020
 const SECTIONS={
   reel:{label:'Reels',name:'Reels',tabs:['ideas','calendario'],
     cats:{organico:['Orgánico','#f472b6'],colaboracion:['Colaboración','#a78bfa']}},
-  youtube:{label:'YouTube',name:'YouTube',tabs:['ideas','calendario','miniaturas'],
+  youtube:{label:'YouTube',name:'YouTube',tabs:['ideas','calendario'],
     cats:{tutorial:['Tutorial','#38bdf8'],lifestyle:['Lifestyle','#4ade80'],opinion:['Opinión','#f59e0b']}},
 };
 const EST={idea:['Idea','#98989f'],proceso:['Guion','#ff9f0a'],grabado:['Grabado','#409cff'],publicado:['Publicado','#30d158']};
@@ -679,14 +679,48 @@ function weekStripHTML(){
   return `<div class="week-strip">${cells}</div>`;
 }
 function renderAgenda(){
+  const pend=(cache.ideas||[]).filter(i=>!i.fecha_pub&&i.estado!=='publicado');
+  const grupo=sec=>{
+    const list=pend.filter(i=>i.seccion===sec);
+    return `<h3 style="margin-top:14px">${SECTIONS[sec].name} <span style="color:var(--mut2);font-weight:500">${list.length}</span></h3>
+    ${list.length?list.map(i=>`<div class="cal-pend" draggable="true" ondragstart="draggedId='${i.id}'" onclick="openIdeaFrom('${i.id}')" style="border-color:${catColor(i.seccion,i.categoria)}" title="${esc(i.titulo)} · arrastra a un día">${esc(i.titulo)||'Sin título'}</div>`).join(''):'<div style="color:var(--mut2);font-size:.76rem;padding:4px 0 8px">Nada sin programar 🎉</div>'}`;
+  };
   $('#main').innerHTML=`
-  <div class="pagehead"><div><h1>Agenda</h1><p>Calendario mensual: eventos de tu calendario, tareas y publicaciones.</p></div></div>
-  ${renderDashCalHTML()}`;
+  <div class="pagehead"><div><h1>Agenda</h1><p>Eventos, tareas y publicaciones. Arrastra ideas al calendario para programarlas.</p></div></div>
+  <div class="cal-wrap">
+    <div>${renderDashCalHTML()}</div>
+    <div class="cal-side" ondragover="event.preventDefault();this.classList.add('drop')" ondragleave="this.classList.remove('drop')" ondrop="this.classList.remove('drop');agUnschedule()">
+      <h3>📥 Sin programar</h3>
+      <div style="font-size:.72rem;color:var(--mut2);line-height:1.5;margin-bottom:8px">Arrastra una idea a un día para programarla. Suéltala aquí de vuelta para desprogramarla.</div>
+      ${grupo('reel')}
+      ${grupo('youtube')}
+    </div>
+  </div>`;
 }
+async function agDrop(ev,ds,el){ev.preventDefault();if(el)el.classList.remove('drop');if(!draggedId)return;await setPubDate(draggedId,ds);draggedId=null;toast('Programado para '+fdate(ds)+' ✓');}
+async function agUnschedule(){if(!draggedId)return;await setPubDate(draggedId,null);draggedId=null;toast('Idea desprogramada');}
 let dashCal=new Date(); dashCal.setDate(1);
 function dashCalMove(n){dashCal.setMonth(dashCal.getMonth()+n);render();}
 function dashCalToday(){dashCal=new Date();dashCal.setDate(1);render();}
-async function addTareaOn(ds){const t=prompt('Nueva tarea para '+fdate(ds)+':');if(!t||!t.trim())return;await db.insert('tareas',{texto:t.trim(),hecha:false,prioridad:'media',fecha:ds,hora:null});cache.tareas=await db.list('tareas');render();}
+/* Pop-up integrado para añadir tarea en un día */
+function addTareaOn(ds){
+  $('#modal').innerHTML=`<h3>Nueva tarea · ${fdate(ds)}</h3>
+   <div class="fg"><label>¿Qué hay que hacer?</label><input id="tm_txt" placeholder="ej. Grabar A-roll del vídeo de Seedance" onkeydown="if(event.key==='Enter')saveTareaModal('${ds}')"></div>
+   <div class="fg" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:0">
+     <div><label>Hora (opcional)</label><input id="tm_hora" type="time"></div>
+     <div><label>Prioridad</label><select id="tm_pri"><option value="media">Media</option><option value="alta">Alta</option><option value="baja">Baja</option></select></div>
+   </div>
+   <div class="modal-actions"><button class="btn ghost" onclick="closeModal()">Cancelar</button><button class="btn" onclick="saveTareaModal('${ds}')">Añadir tarea</button></div>`;
+  $('#overlay').classList.add('open');
+  setTimeout(()=>{const i=$('#tm_txt');if(i)i.focus();},60);
+}
+async function saveTareaModal(ds){
+  const txt=($('#tm_txt').value||'').trim();if(!txt){closeModal();return;}
+  const hora=$('#tm_hora').value||null,pri=$('#tm_pri').value||'media';
+  const r=await db.insert('tareas',{texto:txt,hecha:false,prioridad:pri,fecha:ds,hora});
+  if(r){cache.tareas=await db.list('tareas');recUndo(async()=>{await db.remove('tareas',r.id);cache.tareas=await db.list('tareas');render();});}
+  closeModal();render();toast('Tarea añadida ✓');
+}
 function renderDashCalHTML(){
   const y=dashCal.getFullYear(),m=dashCal.getMonth();
   const monthName=dashCal.toLocaleDateString('es-ES',{month:'long',year:'numeric'});
@@ -715,10 +749,10 @@ function renderDashCalHTML(){
       const ds=wd[c];
       if(!ds){cellsW+='<div class="cal-cell other"></div>';continue;}
       const dn=Number(ds.slice(8,10)); let chips='';
-      ideas.filter(i=>i.fecha_pub===ds).forEach(i=>{const c2=catColor(i.seccion,i.categoria);chips+=`<div class="cal-chip" onclick="event.stopPropagation();openEditor('${i.id}')" style="background:${c2}22;border-color:${c2};color:${c2}" title="${esc(i.titulo)}">${esc(i.titulo)}</div>`;});
+      ideas.filter(i=>i.fecha_pub===ds).forEach(i=>{const c2=catColor(i.seccion,i.categoria);chips+=`<div class="cal-chip" draggable="true" ondragstart="draggedId='${i.id}';event.stopPropagation()" onclick="event.stopPropagation();openIdeaFrom('${i.id}')" style="background:${c2}22;border-color:${c2};color:${c2}" title="${esc(i.titulo)} · arrastra para mover">${esc(i.titulo)||'Sin título'}</div>`;});
       tareas.filter(t=>t.fecha===ds&&t.prioridad!=='evento').forEach(t=>{chips+=`<div class="cal-chip" onclick="event.stopPropagation();toggleTarea('${t.id}')" style="background:var(--accbg);border-color:var(--accbd);color:var(--accInk);${t.hecha?'text-decoration:line-through;opacity:.55':''}" title="${esc(t.texto)}">${esc(t.texto)}</div>`;});
       creds.filter(r=>credParse(r).dia===dn).forEach(r=>{chips+=`<div class="cal-chip" style="background:var(--inset);border-color:var(--mut2);color:var(--mut);cursor:default" title="Renueva créditos">💳 ${esc(r.titulo)}</div>`;});
-      cellsW+=`<div class="cal-cell ${ds===today?'today':''}" onclick="addTareaOn('${ds}')" title="Clic para añadir tarea"><div class="cal-daynum">${dn}</div>${reserve?`<div style="height:${reserve}px;flex:none"></div>`:''}${chips}</div>`;
+      cellsW+=`<div class="cal-cell ${ds===today?'today':''}" onclick="addTareaOn('${ds}')" ondragover="event.preventDefault();this.classList.add('drop')" ondragleave="this.classList.remove('drop')" ondrop="agDrop(event,'${ds}',this)" title="Clic: nueva tarea · suelta aquí una idea para programarla"><div class="cal-daynum">${dn}</div>${reserve?`<div style="height:${reserve}px;flex:none"></div>`:''}${chips}</div>`;
     }
     // Barras de evento (continuas)
     let bars='';
@@ -745,13 +779,11 @@ function renderSection(sec){
   $('#main').innerHTML=`
   <div class="pagehead"><div><h1>${S.label}</h1><p>Tus ideas, guiones y planificación de ${S.name}.</p></div>
     ${tab==='ideas'?`<button class="btn" onclick="newIdea('${sec}')">+ Nueva idea</button>`:''}
-    ${tab==='miniaturas'?`<button class="btn" onclick="openForm('miniaturas')">+ Miniatura</button>`:''}
   </div>
   <div class="sub-tabs">${S.tabs.map(t=>`<button class="${tab===t?'active':''}" onclick="subTab['${sec}']='${t}';render()">${TABNAME[t]}</button>`).join('')}</div>
   <div id="secBody"></div>`;
   if(tab==='ideas')renderIdeaList(sec);
   else if(tab==='calendario')renderCalendar(sec);
-  else if(tab==='miniaturas')renderMiniaturas();
 }
 
 const byOrden=(a,b)=>{const ao=(a.orden==null?1e9:a.orden),bo=(b.orden==null?1e9:b.orden);if(ao!==bo)return ao-bo;return (b.created_at||'').localeCompare(a.created_at||'');};
@@ -1105,7 +1137,7 @@ function updateGuionGrid(){
       <p>${esc(snippet)}${i.contenido.trim().length>180?'…':''}</p>
     </div>`;}).join(''):'<div class="empty">No hay guiones todavía. Escribe el guion dentro de una idea (Reels o YouTube) y aparecerá aquí solo.</div>';
 }
-function renderMiniaturas(){
+function renderMiniaturas(){ // (pestaña retirada; función conservada por si se reactiva)
   const items=cache.miniaturas||[];
   $('#secBody').innerHTML=`<div class="gal">
     ${items.length?items.map(m=>`<div class="thumb" onclick="openForm('miniaturas','${m.id}')">
