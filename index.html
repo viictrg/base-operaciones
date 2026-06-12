@@ -274,7 +274,7 @@
   code{background:var(--inset);border:1px solid var(--line);padding:1px 6px;border-radius:5px;font-size:.8rem}
   a{color:var(--accInk)}
   /* KANBAN */
-  .kb{display:grid;grid-template-columns:repeat(4,minmax(200px,1fr));gap:12px;align-items:start}
+  .kb{display:grid;grid-template-columns:repeat(4,minmax(200px,1fr));gap:12px;align-items:stretch}
   @media(max-width:1100px){.kb{grid-template-columns:repeat(2,1fr)}}
   @media(max-width:560px){.kb{grid-template-columns:1fr}}
   .kb-col{background:var(--inset);border:1px solid var(--line);border-radius:12px;padding:8px;display:flex;flex-direction:column;gap:8px;min-height:150px;transition:.13s}
@@ -750,14 +750,24 @@ function renderIdeaList(sec){
     : renderIdeaKanban(sec,items)}`;
 }
 function renderIdeaKanban(sec,items){
-  return `<div class="kb">${Object.entries(EST).map(([k,v])=>{
+  return `<div class="kb" ondragover="event.preventDefault()" ondrop="kbDropAt(event,'${sec}')">${Object.entries(EST).map(([k,v])=>{
     const col=items.filter(i=>i.estado===k);
-    return `<div class="kb-col" ondragover="event.preventDefault();this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')" ondrop="this.classList.remove('drag-over');kbDropCol('${k}','${sec}')">
+    return `<div class="kb-col" ondragover="event.preventDefault();this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')" ondrop="event.stopPropagation();this.classList.remove('drag-over');kbDropCol('${k}','${sec}')">
       <div class="kb-head"><span class="kdot" style="background:${v[1]}"></span>${v[0]}<span class="kcount">${col.length}</span></div>
       ${col.map(i=>kbCard(i,sec)).join('')}
       ${k==='idea'?`<button class="kb-add" onclick="newIdea('${sec}')">＋ Nueva idea</button>`:''}
     </div>`;}).join('')}</div>
-  <div style="font-size:.74rem;color:var(--mut2);margin-top:12px">Arrastra una tarjeta a otra columna para cambiar su estado.</div>`;
+  <div style="font-size:.74rem;color:var(--mut2);margin-top:12px">Arrastra una tarjeta hacia otra columna (a cualquier altura) para cambiar su estado.</div>`;
+}
+function kbDropAt(ev,sec){
+  ev.preventDefault();
+  const cols=[...document.querySelectorAll('.kb .kb-col')],ests=Object.keys(EST);
+  let best=-1,bd=Infinity;
+  cols.forEach((c,i)=>{const r=c.getBoundingClientRect();
+    const dx=ev.clientX<r.left?r.left-ev.clientX:(ev.clientX>r.right?ev.clientX-r.right:0);
+    const dy=ev.clientY<r.top?r.top-ev.clientY:(ev.clientY>r.bottom?ev.clientY-r.bottom:0);
+    const d=dx*dx+dy*dy;if(d<bd){bd=d;best=i;}});
+  if(best>-1)kbDropCol(ests[best],sec);
 }
 function kbCard(i,sec){
   const cc=catColor(sec,i.categoria);
