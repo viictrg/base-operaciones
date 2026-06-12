@@ -1655,17 +1655,18 @@ async function loginGoogle(){if(!sb)return;await sb.auth.signInWithOAuth({provid
 async function logout(){if(sb){try{await sb.auth.signOut();}catch(e){}}location.reload();}
 async function startApp(){const sb1=document.querySelector('.sidebar');if(sb1)sb1.style.display='';const mt=document.querySelector('.mobile-top');if(mt)mt.style.display='';$('#main').style.maxWidth='';loadUI();setNavActive();await refreshAll();render();}
 
-/* Auto-refresco al volver a la pestaña (p. ej. tras guardar desde la extensión) */
+/* Auto-refresco: al volver a la pestaña + sondeo cada 30 s mientras esté visible */
 let lastSync=Date.now();
-async function softRefresh(){
+async function softRefresh(force){
   if(!CLOUD||!authUser)return;
-  if(Date.now()-lastSync<15000)return;      // máx. una vez cada 15 s
-  if(editing)return;                         // no interrumpir el editor
+  if(!force&&Date.now()-lastSync<4000)return;   // anti-rebote
+  if(editing)return;                             // no interrumpir el editor
   lastSync=Date.now();
   await refreshAll();render();
 }
-window.addEventListener('focus',softRefresh);
+window.addEventListener('focus',()=>softRefresh());
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)softRefresh();});
+setInterval(()=>{if(!document.hidden)softRefresh();},30000);
 
 /* BOOT */
 (async function(){
