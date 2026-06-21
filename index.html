@@ -148,6 +148,11 @@
   .note-check{appearance:none;-webkit-appearance:none;width:19px;height:19px;border:1.6px solid var(--mut2);border-radius:50%;cursor:pointer;flex:none;margin-top:1px;position:relative;transition:.12s}
   .note-check:checked{background:var(--accInk);border-color:var(--accInk)}
   .note-check:checked::after{content:'✓';position:absolute;color:#fff;font-size:.72rem;font-weight:700;left:3px;top:0}
+  .afil-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
+  .afil-card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:13px 15px;display:flex;flex-direction:column;gap:7px}
+  .afil-name{font-weight:700;font-size:.9rem}
+  .afil-url{font-size:.76rem;color:var(--mut2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .afil-actions{display:flex;gap:8px;align-items:center;margin-top:2px}
   .ref-quick{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:20px}
   .ref-qbtn{display:inline-flex;align-items:center;gap:8px;background:var(--accbg);border:1px solid var(--accbd);color:var(--accInk);text-decoration:none;font-weight:700;font-size:.86rem;padding:11px 16px;border-radius:11px;transition:.14s}
   .ref-qbtn:hover{background:var(--accInk);color:#fff;transform:translateY(-1px)}
@@ -1153,10 +1158,18 @@ function diasHasta(dia){dia=Number(dia);if(!dia)return null;const n=new Date();c
 function renderRecursos(){
   const all=cache.recursos||[];
   const creds=all.filter(r=>r.tipo==='credito');
-  const items=all.filter(r=>r.tipo!=='credito');
+  const afils=all.filter(r=>r.tipo==='afiliado');
+  const items=all.filter(r=>r.tipo!=='credito'&&r.tipo!=='afiliado');
   $('#main').innerHTML=`
   <div class="pagehead"><div><h1>Recursos</h1><p>Herramientas, links afiliados y tus créditos de IA.</p></div>
     <button class="btn" onclick="openForm('recursos')">+ Nuevo recurso</button></div>
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:10px;flex-wrap:wrap">
+    <h3 style="font-size:.82rem;text-transform:uppercase;letter-spacing:.6px;color:var(--mut)">🔗 Mis links de afiliados</h3>
+    <button class="btn ghost sm" onclick="openAfilModal()">+ Link de afiliado</button>
+  </div>
+  <div class="afil-grid" style="margin-bottom:28px">
+    ${afils.length?afils.map(afilCard).join(''):'<div style="color:var(--mut2);font-size:.85rem">Sin links todavía. Añade el primero 👆</div>'}
+  </div>
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:10px;flex-wrap:wrap">
     <h3 style="font-size:.82rem;text-transform:uppercase;letter-spacing:.6px;color:var(--mut)">Créditos IA</h3>
     <button class="btn ghost sm" onclick="openCreditModal()">+ Cuenta de créditos</button>
@@ -1173,6 +1186,26 @@ function renderRecursos(){
     <div class="add-card" onclick="openForm('recursos')">＋ Nuevo recurso</div>
   </div>`;
 }
+function afilCard(r){return `<div class="afil-card">
+  <div class="afil-name">🔗 ${esc(r.titulo)}</div>
+  <div class="afil-url" title="${esc(r.url)}">${esc(r.url)||'—'}</div>
+  <div class="afil-actions">
+    <button class="btn sm" onclick="copyAfil('${r.id}')">📋 Copiar</button>
+    <button class="mini-btn" onclick="openAfilModal('${r.id}')" title="Editar">✏️</button>
+  </div></div>`;}
+function copyAfil(id){const r=(cache.recursos||[]).find(x=>x.id===id);if(!r||!r.url)return;navigator.clipboard.writeText(r.url).then(()=>toast('Link copiado ✓')).catch(()=>toast('No se pudo copiar'));}
+function openAfilModal(id){const r=id?(cache.recursos||[]).find(x=>x.id===id):null;
+  $('#modal').innerHTML=`<h3>${id?'✏️ Editar':'➕ Nuevo'} link de afiliado</h3>
+   <div class="fg"><label>Plataforma</label><input id="af_n" value="${esc(r?r.titulo:'')}" placeholder="ej. InVideo"></div>
+   <div class="fg"><label>Tu link de afiliado</label><input id="af_u" value="${esc(r?r.url:'')}" placeholder="https://..."></div>
+   <div class="modal-actions">${id?`<button class="btn-del" onclick="delRecurso('${id}',true)">🗑 Borrar</button>`:''}
+     <button class="btn ghost" onclick="closeModal()">Cancelar</button><button class="btn" onclick="saveAfil('${id||''}')">Guardar</button></div>`;
+  $('#overlay').classList.add('open');}
+async function saveAfil(id){const name=$('#af_n').value.trim();const url=$('#af_u').value.trim();if(!name){alert('Pon la plataforma');return;}
+  const row={titulo:name,tipo:'afiliado',url,notas:'',tags:[]};
+  if(id)await db.update('recursos',id,row);else await db.insert('recursos',row);
+  cache.recursos=await db.list('recursos');updateCounts();closeModal();render();}
+async function delRecurso(id,fromModal){const src=(cache.recursos||[]).find(r=>r.id===id);const old=src?{...src}:null;await db.remove('recursos',id);cache.recursos=await db.list('recursos');if(old)recUndo(async()=>{await db.insert('recursos',old);cache.recursos=await db.list('recursos');render();});updateCounts();if(fromModal)closeModal();render();}
 function creditCard(r){
   const c=credParse(r);const d=diasHasta(c.dia);const soon=d!=null&&d<=3;
   const pc=c.plan==='gratis'?'#4ade80':(c.plan==='pago'?'#38bdf8':'#7a7a82');
