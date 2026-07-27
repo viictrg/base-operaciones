@@ -311,6 +311,19 @@
 
   /* DASHBOARD HOY */
   .hoy-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:14px;margin-bottom:16px}
+  /* Tareas de hoy — bloque principal a todo el ancho */
+  .tareas-full{margin-bottom:16px}
+  .tareas-full h3{font-size:1.02rem;color:var(--txt);text-transform:none;letter-spacing:-.2px;margin-bottom:14px}
+  .tareas-full .todo-add input[type=text]{font-size:.95rem;padding:12px 14px}
+  .tareas-full .todo-add select{background:var(--inset);border:1px solid var(--line);border-radius:9px;padding:9px 11px;color:var(--txt);font-family:inherit;font-size:.84rem;outline:none;cursor:pointer}
+  .tareas-full .trow{padding:10px 0;gap:11px}
+  .tareas-full .trow .ttext{font-size:.95rem}
+  .t-prog{display:flex;align-items:center;gap:9px;font-size:.76rem;color:var(--mut);margin-left:auto;font-weight:400;text-transform:none;letter-spacing:0}
+  .t-prog-bar{width:96px;height:5px;background:var(--inset);border-radius:5px;overflow:hidden}
+  .t-prog-fill{height:100%;background:var(--accInk);transition:width .3s}
+  .pri-pick{background:none;border:1px solid var(--line);border-radius:20px;padding:2px 9px;font-size:.68rem;color:var(--mut);cursor:pointer;font-family:inherit;flex-shrink:0;text-transform:uppercase;letter-spacing:.3px;transition:.15s}
+  .pri-pick:hover{border-color:var(--accInk);color:var(--txt)}
+  .trow .ttext[contenteditable=true]{outline:1px solid var(--accInk);border-radius:6px;padding:3px 7px;background:var(--inset)}
   .pipe-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);cursor:pointer}
   .pipe-row:last-child{border-bottom:none}
   .pipe-row .pr-name{font-size:.84rem;font-weight:600;min-width:74px}
@@ -623,20 +636,33 @@ function renderDashboard(){
   const trow=t=>{const late=t.fecha&&t.fecha<today;return `<div class="trow${t.hecha?' done':''}">
       <input type="checkbox" ${t.hecha?'checked':''} onchange="toggleTarea('${t.id}')">
       <span class="dot" style="margin:0;background:${PRI[t.prioridad]||PRI.media}"></span>
-      <span class="ttext">${esc(t.texto)}</span>
+      <span class="ttext" ondblclick="editTareaTexto(this,'${t.id}')" title="Doble clic para editar">${esc(t.texto)}</span>
+      <button class="pri-pick" onclick="ciclaPrioridad('${t.id}')" title="Cambiar prioridad">${t.prioridad||'media'}</button>
       ${late?`<span class="tag" style="color:var(--red)">${fdate(t.fecha)}</span>`:(t.hora?`<span class="tag">${t.hora}</span>`:'')}
       <button class="trow-x" onclick="delTarea('${t.id}')" title="Borrar">✕</button></div>`;};
+  const _todas=atrasadas.concat(hoyT);
+  const _hechasHoy=tareas.filter(t=>t.hecha&&t.fecha===today).length;
+  const _totHoy=_todas.length+_hechasHoy;
+  const _pct=_totHoy?Math.round(_hechasHoy/_totHoy*100):0;
   $('#main').innerHTML=`
   <div class="pagehead"><div><h1>Hoy</h1><p style="text-transform:capitalize">${fechaLarga}</p></div></div>
   ${CLOUD?'':`<div class="banner">Estás en <b>modo local</b>. Para que perdure y sincronice, conecta Supabase en <b>Conexión</b>.</div>`}
-  <div class="hoy-grid">
-    <div class="widget"><h3>Tareas de hoy ${atrasadas.length?`<span style="color:var(--red);text-transform:none;letter-spacing:0">· ${atrasadas.length} atrasada${atrasadas.length===1?'':'s'}</span>`:''}</h3>
-      <div class="todo-add" style="margin-bottom:10px">
-        <input type="text" id="todoInput" placeholder="Nueva tarea para hoy…" onkeydown="if(event.key==='Enter')addTareaHoy()">
-      </div>
-      <div class="wlist">${(atrasadas.concat(hoyT)).length?atrasadas.map(trow).join('')+hoyT.map(trow).join(''):'<div style="color:var(--mut2);font-size:.84rem">Nada para hoy. Día libre o día de rodaje 🎬</div>'}</div>
-      ${sinFecha.length?`<div style="font-size:.72rem;color:var(--mut2);margin-top:10px">+ ${sinFecha.length} sin fecha — están en la Agenda</div>`:''}
+  <div class="widget tareas-full">
+    <h3 style="display:flex;align-items:center">Tareas de hoy ${atrasadas.length?`<span style="color:var(--red);text-transform:none;letter-spacing:0;font-weight:400">&nbsp;· ${atrasadas.length} atrasada${atrasadas.length===1?'':'s'}</span>`:''}
+      ${_totHoy?`<span class="t-prog"><span>${_hechasHoy}/${_totHoy}</span><span class="t-prog-bar"><span class="t-prog-fill" style="width:${_pct}%"></span></span><span>${_pct}%</span></span>`:''}
+    </h3>
+    <div class="todo-add" style="margin-bottom:12px">
+      <input type="text" id="todoInput" placeholder="Nueva tarea para hoy…" onkeydown="if(event.key==='Enter')addTareaHoy()">
+      <select id="todoPri">
+        <option value="alta">Alta</option>
+        <option value="media" selected>Media</option>
+        <option value="baja">Baja</option>
+      </select>
     </div>
+    <div class="wlist">${_todas.length?atrasadas.map(trow).join('')+hoyT.map(trow).join(''):'<div style="color:var(--mut2);font-size:.9rem;padding:14px 0">Nada para hoy. Día libre o día de rodaje 🎬</div>'}</div>
+    ${sinFecha.length?`<div style="font-size:.72rem;color:var(--mut2);margin-top:10px">+ ${sinFecha.length} sin fecha — están en la Agenda</div>`:''}
+  </div>
+  <div class="hoy-grid">
     <div class="widget"><h3>Eventos</h3><div class="wlist">
       ${evHoy.length?evHoy.map(t=>`<div class="wrow"><span class="dot" style="margin:0;background:${eventColor(t.texto)}"></span><span class="r-title">${esc(t.texto)}</span><span class="tag">hoy</span></div>`).join(''):'<div style="color:var(--mut2);font-size:.84rem">Sin eventos hoy.</div>'}
       ${evNext.length?`<div style="font-size:.68rem;color:var(--mut2);text-transform:uppercase;letter-spacing:.5px;margin-top:6px">Próximos</div>`+evNext.map(t=>`<div class="wrow"><span class="dot" style="margin:0;background:${eventColor(t.texto)}"></span><span class="r-title">${esc(t.texto)}</span><span class="tag">${fdate(t.fecha)}</span></div>`).join(''):''}
@@ -667,8 +693,37 @@ function renderDashboard(){
 }
 async function addTareaHoy(){
   const inp=$('#todoInput');const texto=(inp.value||'').trim();if(!texto)return;inp.value='';
-  const r=await db.insert('tareas',{texto,hecha:false,prioridad:'media',fecha:todayISO(),hora:null});
-  if(r){cache.tareas=await db.list('tareas');recUndo(async()=>{await db.remove('tareas',r.id);cache.tareas=await db.list('tareas');render();});render();}
+  const pri=($('#todoPri')&&$('#todoPri').value)||'media';
+  const r=await db.insert('tareas',{texto,hecha:false,prioridad:pri,fecha:todayISO(),hora:null});
+  if(r){cache.tareas=await db.list('tareas');recUndo(async()=>{await db.remove('tareas',r.id);cache.tareas=await db.list('tareas');render();});render();
+    setTimeout(()=>{const i=$('#todoInput');if(i)i.focus();},40);}
+}
+async function ciclaPrioridad(id){
+  const t=(cache.tareas||[]).find(x=>x.id===id);if(!t)return;
+  const orden=['alta','media','baja'];
+  const prev=t.prioridad||'media';
+  const next=orden[(orden.indexOf(prev)+1)%orden.length];
+  await db.update('tareas',id,{prioridad:next});
+  cache.tareas=await db.list('tareas');
+  recUndo(async()=>{await db.update('tareas',id,{prioridad:prev});cache.tareas=await db.list('tareas');render();});
+  render();
+}
+function editTareaTexto(el,id){
+  const t=(cache.tareas||[]).find(x=>x.id===id);if(!t)return;
+  const prev=t.texto;
+  el.contentEditable='true';el.focus();
+  const sel=window.getSelection();const rg=document.createRange();rg.selectNodeContents(el);sel.removeAllRanges();sel.addRange(rg);
+  const fin=async()=>{
+    el.contentEditable='false';
+    const v=(el.textContent||'').trim();
+    if(v&&v!==prev){
+      await db.update('tareas',id,{texto:v});cache.tareas=await db.list('tareas');
+      recUndo(async()=>{await db.update('tareas',id,{texto:prev});cache.tareas=await db.list('tareas');render();});
+    }
+    render();
+  };
+  el.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();el.blur();}if(e.key==='Escape'){el.textContent=prev;el.contentEditable='false';render();}};
+  el.onblur=fin;
 }
 function openIdeaFrom(id){const i=(cache.ideas||[]).find(x=>x.id===id);if(!i)return;SEC=i.seccion;setNavActive();openEditor(id);}
 function weekStripHTML(){
