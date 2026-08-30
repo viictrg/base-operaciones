@@ -1323,10 +1323,32 @@ function mMeta(m){try{const o=JSON.parse(m.notas||'{}');return (o&&typeof o==='o
               (de los 848 devuelves 168 de IVA y 120 de IRPF que aún faltan)
      Andorra  base 1000, sin IVA ni retención = bruto 1000 → neto 700
    ═══════════════════════════════════════════════════════════════════════ */
-const CARGA_FISCAL=0.30;
+const MIN_PERSONAL=5550;
+const CARGA_MIN=0.20;   // suelo: a principios de año, con poco facturado, no bajar de aquí
+const CARGA_MAX=0.45;
+/* Tipo efectivo REAL del ejercicio: se calcula con los tramos del IRPF sobre tu
+   rendimiento neto del año, en vez de con un porcentaje fijo. Sube solo conforme
+   facturas más. Se memoriza por render (lo invalida renderFinanzas). */
+let _carga=null;
+function invalidarCarga(){_carga=null;}
+function cargaFiscal(){
+  if(_carga!==null)return _carga;
+  const mov=cache.movimientos||[], yr=finYear;
+  const ing=mov.filter(m=>m.tipo==='ingreso'&&yOf(m.fecha)===yr&&m.estado!=='propuesta');
+  const bIng=ing.reduce((s,m)=>s+(Number(m.importe)||0),0);
+  if(bIng<=0)return _carga=CARGA_MIN;
+  const gas=mov.filter(m=>m.tipo==='gasto'&&yOf(m.fecha)===yr);
+  const bGas=gas.filter(m=>!m.amort).reduce((s,m)=>s+(Number(m.importe)||0),0);
+  const amY=gas.filter(m=>m.amort).reduce((s,m)=>s+amortAnual(m),0);
+  const fDesg=mov.filter(m=>m.tipo==='fijo'&&mMeta(m).desg).reduce((s,m)=>s+(Number(m.importe)||0),0)*12;
+  const neto=bIng-bGas-amY-fDesg;
+  if(neto<=0)return _carga=CARGA_MIN;
+  const irpf=Math.max(0,irpfEstimate(neto)-MIN_PERSONAL*0.19);
+  return _carga=Math.min(CARGA_MAX,Math.max(CARGA_MIN,irpf/neto));
+}
 function irpfAmt(m){return mMeta(m).irpf?(Number(m.importe)||0)*0.15:0;}
 function brutoIng(m){return (Number(m.importe)||0)+ivaOf(m)-irpfAmt(m);}
-function netoIng(m){return (Number(m.importe)||0)*(1-CARGA_FISCAL);}
+function netoIng(m){return (Number(m.importe)||0)*(1-cargaFiscal());}
 function debeHacienda(m){return brutoIng(m)-netoIng(m);}
 function totalGasto(m){return (Number(m.importe)||0)+ivaOf(m);}
 function reservaFor(ingArr,gas){
@@ -1335,11 +1357,11 @@ function reservaFor(ingArr,gas){
   const bGas=gas.filter(m=>!m.amort).reduce((s,m)=>s+(Number(m.importe)||0),0);
   const amY=gas.filter(m=>m.amort).reduce((s,m)=>s+amortAnual(m),0);
   const ret=ingArr.reduce((s,m)=>s+irpfAmt(m),0);
-  return Math.max(0,ivaR-ivaS)+Math.max(0,(bIng-bGas-amY)*CARGA_FISCAL-ret);
+  return Math.max(0,ivaR-ivaS)+Math.max(0,(bIng-bGas-amY)*cargaFiscal()-ret);
 }
-/* El 30% de CARGA_FISCAL es deliberadamente conservador: el Modelo 130 solo adelanta
-   el 20%, pero el tipo efectivo real acaba entre el 24% y el 30% y lo que falta llega
-   en la Renta de junio. Cambiando esa constante se recalcula toda la app. */
+/* Nota: para la facturación FUTURA no se usa el tipo efectivo sino el MARGINAL,
+   porque ese dinero se suma encima de lo que ya has facturado y tributa al tipo
+   del último tramo, no al promedio. */
 function fInput(id,field,val,type,w){const v=(val==null?'':esc(val));return `<input class="fcell" type="${type}" value="${v}" style="width:${w}px" onchange="finSet('${id}','${field}',this.value)">`;}
 function finNewFecha(){const q={'T1':'-02-15','T2':'-05-15','T3':'-08-15','T4':'-11-15'}[finPeriod];return q?(finYear+q):todayISO();}
 async function finSet(id,field,value){
@@ -1388,7 +1410,9 @@ function objetivoPanel(){
   const propuestas=propsY.reduce((s,m)=>s+(Number(m.importe)||0),0);
   const futExtra=Number(cfg.futuro)||0;
   const futuro=propuestas+futExtra;
-  const futTax=Math.max(0,futuro)*0.30; // ~30% impuestos estimados sobre facturación futura (bruto, base sin IVA)
+  const _netoY=ingY.filter(m=>m.estado!=='propuesta').reduce((s,m)=>s+(Number(m.importe)||0),0)-gasY.reduce((s,m)=>s+(Number(m.importe)||0),0);
+  const tipoFut=tramoMarginal(Math.max(0,_netoY))/100; // marginal: la facturación futura va encima de lo ya facturado
+  const futTax=Math.max(0,futuro)*tipoFut;
   const reserva=reservaBase+futTax;
   const proy=saldo+porCobrar+futuro+(cfg.renta||0)-fijoRest-gastoPend-gfTotal-cfg.hacienda-reserva;
   const goal=cfg.goal||50000;const pct=goal>0?Math.max(0,Math.min(100,proy/goal*100)):0;
@@ -1421,7 +1445,7 @@ function objetivoPanel(){
         ${line('Hacienda (provisión)',cfg.hacienda,-1)}
         ${(cfg.renta||0)!==0?line('Renta 2025 ('+((cfg.renta||0)>=0?'te devuelven':'a pagar')+')',Math.abs(cfg.renta||0),(cfg.renta||0)>=0?1:-1):''}
         ${line('Reserva impuestos (facturas actuales)',reservaBase,-1)}
-        ${line('Impuestos ~30% de tu facturación futura',futTax,-1)}
+        ${line('Impuestos de tu facturación futura',futTax,-1)}
         <div style="border-top:1px solid var(--line);margin-top:6px;padding-top:6px;display:flex;justify-content:space-between"><b>Proyección a 31 dic</b><b class="num" style="color:${col}">${eur(proy)}</b></div>
       </div>
       <div><div class="lbl" style="margin-bottom:6px">✏️ Ajusta tus supuestos</div>
@@ -1527,7 +1551,6 @@ function cajaPanel(parte){
    RENTA · borrador de la declaración que se paga en junio del año siguiente.
    Ojo: el mínimo personal se resta de la CUOTA (5.550 × 19%), no de la base.
    ============================================================ */
-const MIN_PERSONAL=5550;
 function tramoMarginal(n){return n<=12450?19:n<=20200?24:n<=35200?30:n<=60000?37:n<=300000?45:47;}
 /* Un impuesto pertenece al ejercicio yr si su periodo empieza por ese año.
    Se mira el periodo y no fecha_limite porque el 130 del T4 vence en enero del año siguiente. */
@@ -1638,6 +1661,7 @@ function rentaPanel(){
   </div>`;
 }
 function renderFinanzas(){
+  invalidarCarga();
   const mov=cache.movimientos||[];const yr=finYear;
   const inPer=m=>finPeriod==='año'||('T'+qOf(m.fecha))===finPeriod;
   const ing=mov.filter(m=>m.tipo==='ingreso'&&yOf(m.fecha)===yr&&inPer(m));
@@ -1672,7 +1696,7 @@ function renderFinanzas(){
     <div class="stat b2" style="border:1.5px solid var(--green)">
       <div class="lbl">💰 Neto del periodo · tuyo de verdad</div>
       <div class="val xl" style="color:var(--green)">${eur(netoPeriodo)}</div>
-      <div style="font-size:.72rem;color:var(--mut2);margin-top:4px">Base facturada menos el ${Math.round(CARGA_FISCAL*100)}% de impuestos. Ya está descontado todo — no hay que restarle nada más.</div>
+      <div style="font-size:.72rem;color:var(--mut2);margin-top:4px">Base facturada menos el ${Math.round(cargaFiscal()*100)}% de impuestos. Ya está descontado todo — no hay que restarle nada más.</div>
     </div>
     <div class="stat b2"><div class="lbl">🧾 Base facturada <span style="font-size:.7rem;color:var(--mut2)">(volumen, sin IVA)</span></div><div class="val xl">${eur(baseTotal)}</div><div style="font-size:.72rem;color:var(--mut2);margin-top:4px">Entra al banco ${eur(brutoCobrado+brutoPend)} en bruto · le debes ${eur(deudaHacienda)} a Hacienda</div></div>
     <div class="stat"><div class="lbl">✅ Cobrado (neto)</div><div class="val pos">${eur(cobrado)}</div><div style="font-size:.72rem;color:var(--mut2);margin-top:4px">Bruto en banco ${eur(brutoCobrado)}</div></div>
@@ -1684,7 +1708,7 @@ function renderFinanzas(){
         <div style="display:flex;justify-content:space-between;gap:8px"><span style="color:var(--mut)">Confirmado</span><span style="font-weight:800;color:var(--accInk)">${eur(reservaReal)}</span></div>
         <div style="display:flex;justify-content:space-between;gap:8px"><span style="color:var(--mut)">Si todo</span><span style="font-weight:800;color:var(--blue)">${eur(reservaProy)}</span></div>
         ${ivaCompensar>0?`<div style="display:flex;justify-content:space-between;gap:8px"><span style="color:var(--mut)">IVA a compensar</span><span style="font-weight:800;color:var(--green)">${eur(ivaCompensar)}</span></div>`:''}
-        <div style="font-size:.7rem;color:var(--mut2);margin-top:3px;line-height:1.45">IVA a liquidar + ${Math.round(CARGA_FISCAL*100)}% del beneficio − retenciones. Es el dinero que debes tener apartado.</div>
+        <div style="font-size:.7rem;color:var(--mut2);margin-top:3px;line-height:1.45">IVA a liquidar + ${Math.round(cargaFiscal()*100)}% del beneficio − retenciones. Es el dinero que debes tener apartado.</div>
       </div></div>
   </div>
   <div class="sub-tabs">
