@@ -548,7 +548,8 @@ function fdate(d){if(!d)return'';const x=new Date(d);return x.toLocaleDateString
 const todayISO=()=>{const d=new Date();return ymd(d.getFullYear(),d.getMonth(),d.getDate());};
 const qOf=ds=>Math.floor(new Date(ds).getMonth()/3)+1;
 const yOf=ds=>new Date(ds).getFullYear();
-const ivaPct=m=>(m.iva!=null&&m.iva!=='')?Number(m.iva):21;
+const ivaVacio=m=>(m.iva==null||m.iva==='');
+const ivaPct=m=>ivaVacio(m)?0:Number(m.iva);
 const ivaOf=m=>(Number(m.importe)||0)*ivaPct(m)/100;
 const amortAnual=m=>(Number(m.importe)||0)/(Number(m.amort_anios)||4);
 function irpfEstimate(base){const b=Math.max(0,base);const tr=[[12450,.19],[20200,.24],[35200,.30],[60000,.37],[300000,.45],[Infinity,.47]];let prev=0,tax=0;for(const[lim,r]of tr){const amt=Math.min(b,lim)-prev;if(amt>0)tax+=amt*r;prev=lim;if(b<=lim)break;}return tax;}
@@ -1314,6 +1315,10 @@ function reservaFor(ingArr,gas){
   const ret=ingArr.reduce((s,m)=>s+irpfAmt(m),0);
   return Math.max(0,ivaR-ivaS)+Math.max(0,(bIng-bGas-amY)*0.20-ret);
 }
+/* IRPF que TODAVÍA debes por esta factura: 20% de pago fraccionado sobre la base,
+   menos lo que el cliente ya te retuvo. No incluye IVA a propósito: se aplica sobre
+   netoIng(), que ya es base sin IVA — sumarlo aquí lo restaría dos veces. */
+function pesoFiscal(m){const base=Number(m.importe)||0;return Math.max(0,base*0.20-irpfAmt(m));}
 function fInput(id,field,val,type,w){const v=(val==null?'':esc(val));return `<input class="fcell" type="${type}" value="${v}" style="width:${w}px" onchange="finSet('${id}','${field}',this.value)">`;}
 function finNewFecha(){const q={'T1':'-02-15','T2':'-05-15','T3':'-08-15','T4':'-11-15'}[finPeriod];return q?(finYear+q):todayISO();}
 async function finSet(id,field,value){
@@ -1356,11 +1361,15 @@ function objetivoPanel(){
   const gastoPend=mov.filter(m=>m.tipo==='gasto'&&m.estado==='pendiente').reduce((s,m)=>s+totalGasto(m),0);
   const ingY=ing.filter(m=>yOf(m.fecha)===yr);const gasY=mov.filter(m=>m.tipo==='gasto'&&yOf(m.fecha)===yr);
   const reservaBase=reservaFor(ingY.filter(m=>m.estado!=='propuesta'),gasY);
-  const futTax=Math.max(0,cfg.futuro)*0.30; // ~30% impuestos estimados sobre facturación futura (bruto, base sin IVA)
+  const propsY=ing.filter(m=>m.estado==='propuesta'&&yOf(m.fecha)===yr);
+  const propuestas=propsY.reduce((s,m)=>s+(Number(m.importe)||0),0);
+  const futExtra=Number(cfg.futuro)||0;
+  const futuro=propuestas+futExtra;
+  const futTax=Math.max(0,futuro)*0.30; // ~30% impuestos estimados sobre facturación futura (bruto, base sin IVA)
   const reserva=reservaBase+futTax;
-  const proy=saldo+porCobrar+cfg.futuro+(cfg.renta||0)-fijoRest-gastoPend-gfTotal-cfg.hacienda-reserva;
+  const proy=saldo+porCobrar+futuro+(cfg.renta||0)-fijoRest-gastoPend-gfTotal-cfg.hacienda-reserva;
   const goal=cfg.goal||50000;const pct=goal>0?Math.max(0,Math.min(100,proy/goal*100)):0;
-  const baseNoFut=proy-(cfg.futuro-futTax); // proyección sin contar la facturación futura
+  const baseNoFut=proy-(futuro-futTax); // proyección sin contar la facturación futura
   const reqTotal=Math.max(0,(goal-baseNoFut)/0.70); // facturación bruta necesaria (descontando ~30% impuestos)
   const reqMes=mesesRest>0?reqTotal/mesesRest:0;
   const gap=goal-proy;const porMes=mesesRest>0&&gap>0?gap/mesesRest:0;
@@ -1382,7 +1391,7 @@ function objetivoPanel(){
       <div><div class="lbl" style="margin-bottom:6px">📊 Cómo se calcula</div>
         ${line('Dinero actual en cuenta',saldo,0)}
         ${line('Por cobrar (te lo deben)',porCobrar,1)}
-        ${line('Facturación que esperas hasta fin de año',cfg.futuro,1)}
+        ${line('Facturación que esperas hasta fin de año',futuro,1)}
         ${line('Gastos fijos × '+mesesRest+' meses',fijoRest,-1)}
         ${line('Gastos variables pendientes',gastoPend,-1)}
         ${line('Gastos futuros estimados',gfTotal,-1)}
@@ -1394,7 +1403,9 @@ function objetivoPanel(){
       </div>
       <div><div class="lbl" style="margin-bottom:6px">✏️ Ajusta tus supuestos</div>
         <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:4px 0"><span style="color:var(--mut)">🎯 Meta de ahorro</span>${ci('goal',goal)}</div>
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:4px 0"><span style="color:var(--mut)">📈 Facturación futura <span style="font-size:.74rem;color:var(--mut2)">(bruto, sin IVA)</span></span>${ci('futuro',cfg.futuro)}</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:4px 0"><span style="color:var(--mut)">📈 Facturación futura <span style="font-size:.74rem;color:var(--mut2)">(auto · ${propsY.length} propuesta${propsY.length===1?'':'s'})</span></span><b class="num" style="color:var(--acc)">${eur(propuestas)}</b></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:4px 0"><span style="color:var(--mut)">➕ Extra manual <span style="font-size:.74rem;color:var(--mut2)">(bruto, sin IVA)</span></span>${ci('futuro',futExtra)}</div>
+        <div style="font-size:.72rem;color:var(--mut2);margin:-2px 0 4px">Total futuro: <b style="color:var(--txt)">${eur(futuro)}</b> · marca ingresos como 💡 Propuesta para que sumen aquí solos</div>
         <details ${gfutOpen?'open':''} ontoggle="gfutOpen=this.open" class="gfut">
           <summary><span style="color:var(--mut)">🎬 Gastos futuros estimados <span style="font-size:.72rem;color:var(--mut2)">(toca para detallar)</span></span><b class="num">${eur(gfTotal)}</b></summary>
           <div style="margin-top:8px;display:flex;flex-direction:column;gap:6px">
@@ -1473,20 +1484,42 @@ function renderFinanzas(){
   const confirmados=ing.filter(m=>m.estado!=='propuesta');
   const reservaReal=reservaFor(confirmados,gas);
   const reservaProy=reservaFor(ing,gas);
+  /* --- neto real, IVA a compensar y aviso de IVA sin rellenar --- */
+  const netoTodo=facturado-reservaReal;
+  const dispoHoy=cobrado-reservaReal;
+  const _ivaR=confirmados.reduce((s,m)=>s+ivaOf(m),0),_ivaS=gas.reduce((s,m)=>s+ivaOf(m),0);
+  const ivaCompensar=Math.max(0,_ivaS-_ivaR);
+  const sinIva=ing.filter(ivaVacio);
   $('#main').innerHTML=`
   <div class="pagehead"><div><h1>Finanzas</h1><p>Tu hoja de ingresos y gastos — impuestos calculados solos.</p></div>
     <div class="cal-head" style="margin:0"><button class="cal-nav" onclick="finYear--;renderFinanzas()">‹</button><h2 style="min-width:auto;font-size:1rem">${yr}</h2><button class="cal-nav" onclick="finYear++;renderFinanzas()">›</button></div></div>
   <div class="sub-tabs" style="margin-bottom:16px">${['año','T1','T2','T3','T4'].map(p=>`<button class="${finPeriod===p?'active':''}" onclick="finPeriod='${p}';renderFinanzas()">${p==='año'?'Año completo':p}</button>`).join('')}</div>
+  ${sinIva.length?`<div style="background:#2a1a00;border:1px solid var(--orange);border-radius:var(--radius);padding:11px 14px;margin-bottom:14px;font-size:.84rem;line-height:1.5">
+    ⚠️ <b>${sinIva.length} ingreso${sinIva.length===1?'':'s'} con el campo IVA vacío</b> — se están calculando al 0%.
+    <span style="color:var(--mut)">Correcto para Andorra, Singapur o EEUU. Si alguno es español, escríbele el 21 a mano.</span>
+  </div>`:''}
   <div class="fin-stats">
     <div class="stat"><div class="lbl">Cobrado (neto)</div><div class="val pos">${eur(cobrado)}</div></div>
     <div class="stat"><div class="lbl">Pendiente de cobro (neto)</div><div class="val" style="color:var(--orange)">${eur(pendiente)}</div></div>
     <div class="stat b2"><div class="lbl">📤 Gastos del periodo</div><div class="val xl neg">${eur(gastosTotal)}</div><div style="font-size:.72rem;color:var(--mut2);margin-top:4px">Se descuentan en el cálculo de impuestos</div></div>
     <div class="stat b2"><div class="lbl">💼 Facturado · cobrado + pendiente</div><div class="val xl">${eur(facturado)}</div></div>
+    <div class="stat b2" style="border:1px solid var(--green)">
+      <div class="lbl">💰 Tuyo de verdad</div>
+      <div class="val xl" style="color:var(--green)">${eur(netoTodo)}</div>
+      <div style="font-size:.72rem;color:var(--mut2);margin-top:4px">Facturado − reserva de impuestos. Lo que te queda cuando cobres todo y pagues a Hacienda.</div>
+    </div>
+    <div class="stat" style="${dispoHoy<0?'border:1px solid var(--red)':''}">
+      <div class="lbl">🔒 Disponible hoy</div>
+      <div class="val" style="color:${dispoHoy<0?'var(--red)':'var(--txt)'}">${eur(dispoHoy)}</div>
+      <div style="font-size:.72rem;color:var(--mut2);margin-top:4px">${dispoHoy<0?'⚠️ Ya has tocado dinero que le debes a Hacienda':'Cobrado menos la reserva completa. Lo que puedes gastar sin comerte los impuestos.'}</div>
+    </div>
     <div class="stat"><div class="lbl">📈 Si todo se ejecuta (neto)</div><div class="val" style="color:var(--blue)">${eur(siTodo)}</div></div>
     <div class="stat"><div class="lbl">🛡️ Reserva impuestos</div>
       <div style="display:flex;flex-direction:column;gap:4px;margin-top:7px;font-size:.85rem">
         <div style="display:flex;justify-content:space-between;gap:8px"><span style="color:var(--mut)">Confirmado</span><span style="font-weight:800;color:var(--accInk)">${eur(reservaReal)}</span></div>
         <div style="display:flex;justify-content:space-between;gap:8px"><span style="color:var(--mut)">Si todo</span><span style="font-weight:800;color:var(--blue)">${eur(reservaProy)}</span></div>
+        ${ivaCompensar>0?`<div style="display:flex;justify-content:space-between;gap:8px"><span style="color:var(--mut)">IVA a compensar</span><span style="font-weight:800;color:var(--green)">${eur(ivaCompensar)}</span></div>`:''}
+        <div style="font-size:.7rem;color:var(--mut2);margin-top:3px;line-height:1.45">IVA a liquidar + 20% del beneficio − retenciones ya practicadas. Incluye facturas aún no cobradas.</div>
       </div></div>
   </div>
   <div class="sub-tabs">
@@ -1510,7 +1543,7 @@ function renderIngresos(ing){
     <span style="font-size:.74rem;color:var(--mut2)">Edita cualquier celda. Subtotal = base sin IVA · IRPF 15% = retención del cliente · ✅ Hecho = trabajo realizado · 📤 F. env. = factura enviada.</span>
   </div>
   <div style="overflow-x:auto"><table style="min-width:1010px"><thead><tr>
-    <th>Factura</th><th>Concepto</th><th>Fecha</th><th>Trim</th><th class="num">Subtotal</th><th class="num">IVA %</th><th>IRPF 15%</th><th class="num">Bruto</th><th class="num">Neto</th><th title="Trabajo realizado">Hecho</th><th title="Factura enviada">F. env.</th><th>Estado</th><th></th>
+    <th>Factura</th><th>Concepto</th><th>Fecha</th><th>Trim</th><th class="num">Subtotal</th><th class="num">IVA %</th><th>IRPF 15%</th><th class="num">Bruto</th><th class="num">Neto</th><th class="num" title="Neto menos el IRPF que aún debes por esta factura (20% − retención ya practicada)">Tuyo</th><th title="Trabajo realizado">Hecho</th><th title="Factura enviada">F. env.</th><th>Estado</th><th></th>
   </tr></thead><tbody>
   ${ing.length?ing.map(m=>{const me=mMeta(m);return `<tr class="row-${m.estado}">
     <td>${fInput(m.id,'factura',me.factura||'','text',64)}</td>
@@ -1522,13 +1555,14 @@ function renderIngresos(ing){
     <td style="text-align:center"><input type="checkbox" ${me.irpf?'checked':''} onchange="finSet('${m.id}','irpf',this.checked)"></td>
     <td class="num">${eur(brutoIng(m))}</td>
     <td class="num pos">${eur(netoIng(m))}</td>
+    <td class="num" style="color:var(--green);font-weight:700" title="IRPF pendiente: ${eur(pesoFiscal(m))}">${eur(netoIng(m)-pesoFiscal(m))}</td>
     <td style="text-align:center"><input type="checkbox" ${me.hecho?'checked':''} onchange="finSet('${m.id}','hecho',this.checked)" title="Trabajo realizado"></td>
     <td style="text-align:center"><input type="checkbox" ${me.fenv?'checked':''} onchange="finSet('${m.id}','fenv',this.checked)" title="Factura enviada"></td>
     <td><select class="fcell" onchange="finSet('${m.id}','estado',this.value)">${[['cobrado','✅ Cobrado'],['pendiente','⏳ Pendiente'],['propuesta','💡 Propuesta']].map(o=>`<option value="${o[0]}" ${m.estado===o[0]?'selected':''}>${o[1]}</option>`).join('')}</select></td>
     <td><button class="trow-x" onclick="finDel('${m.id}')">🗑</button></td>
-  </tr>`;}).join(''):'<tr><td colspan="13" style="text-align:center;color:var(--mut2);padding:30px">Sin ingresos en '+finYear+'. Añade el primero 👆</td></tr>'}
+  </tr>`;}).join(''):'<tr><td colspan="14" style="text-align:center;color:var(--mut2);padding:30px">Sin ingresos en '+finYear+'. Añade el primero 👆</td></tr>'}
   </tbody>
-  ${ing.length?`<tfoot><tr><td colspan="4"><b>TOTAL · ${ing.length} facturas</b></td><td class="num"><b>${eur(tot(m=>Number(m.importe)||0))}</b></td><td colspan="2"></td><td class="num"><b>${eur(tot(brutoIng))}</b></td><td class="num pos"><b>${eur(tot(netoIng))}</b></td><td colspan="2" style="font-size:.76rem;color:var(--mut)">✅ ${ing.filter(m=>mMeta(m).hecho).length}/${ing.length} hechos · 📤 ${ing.filter(m=>mMeta(m).fenv).length}/${ing.length} facturados</td><td colspan="2"></td></tr></tfoot>`:''}
+  ${ing.length?`<tfoot><tr><td colspan="4"><b>TOTAL · ${ing.length} facturas</b></td><td class="num"><b>${eur(tot(m=>Number(m.importe)||0))}</b></td><td colspan="2"></td><td class="num"><b>${eur(tot(brutoIng))}</b></td><td class="num pos"><b>${eur(tot(netoIng))}</b></td><td class="num" style="color:var(--green)"><b>${eur(tot(m=>netoIng(m)-pesoFiscal(m)))}</b></td><td colspan="2" style="font-size:.76rem;color:var(--mut)">✅ ${ing.filter(m=>mMeta(m).hecho).length}/${ing.length} hechos · 📤 ${ing.filter(m=>mMeta(m).fenv).length}/${ing.length} facturados</td><td colspan="2"></td></tr></tfoot>`:''}
   </table></div>`;
 }
 function renderGastos(gas){
@@ -1681,7 +1715,7 @@ const FORMS={
   recursos:{title:'Recurso',fields:[['titulo','Título','text',1],['url','URL','text'],['tipo','Tipo','select',0,[['herramienta','Herramienta'],['preset','Preset'],['asset','Asset'],['link','Link'],['otro','Otro']]],['notas','Notas','textarea'],['tags','Tags (coma)','tags']]},
   referencias:{title:'Referencia',fields:[['titulo','Título','text'],['url','URL','text'],['url_imagen','URL imagen/preview','text'],['plataforma','Plataforma','select',0,[['instagram','Instagram'],['tiktok','TikTok'],['youtube','YouTube'],['otro','Otro']]],['autor','Autor','text'],['notas','Notas','textarea'],['tags','Tags (coma)','tags']]},
   miniaturas:{title:'Miniatura',fields:[['titulo','Título','text'],['url_imagen','URL de la imagen','text'],['fuente','Fuente / autor','text'],['url_video','URL del vídeo','text'],['notas','Notas','textarea'],['tags','Tags (coma)','tags']]},
-  movimientos:{title:'Movimiento',fields:[['concepto','Concepto','text',1],['tipo','Tipo','select',0,[['ingreso','💚 Ingreso'],['gasto','❤️ Gasto']]],['importe','Importe BASE sin IVA (€)','number',1],['iva','IVA %','number'],['fecha','Fecha','date'],['cliente','Cliente / proveedor','text'],['categoria','Categoría','select',0,[['cliente','Cliente'],['software','Software'],['equipo','Equipo / material'],['impuestos','Impuestos'],['general','General']]],['estado','Estado','select',0,[['cobrado','Cobrado'],['pendiente','Pendiente'],['pagado','Pagado'],['previsto','Previsto']]],['amort','Es amortización (material >300€: se deduce en varios años)','check'],['amort_anios','Años de amortización','number'],['notas','Notas','textarea']]},
+  movimientos:{title:'Movimiento',fields:[['concepto','Concepto','text',1],['tipo','Tipo','select',0,[['ingreso','💚 Ingreso'],['gasto','❤️ Gasto']]],['importe','Importe BASE sin IVA (€)','number',1],['iva','IVA %','number'],['fecha','Fecha','date'],['cliente','Cliente / proveedor','text'],['categoria','Categoría','select',0,[['cliente','Cliente'],['software','Software'],['equipo','Equipo / material'],['impuestos','Impuestos'],['general','General']]],['estado','Estado','select',0,[['cobrado','Cobrado'],['pendiente','Pendiente'],['pagado','Pagado'],['propuesta','Propuesta']]],['amort','Es amortización (material >300€: se deduce en varios años)','check'],['amort_anios','Años de amortización','number'],['notas','Notas','textarea']]},
   impuestos:{title:'Impuesto',fields:[['modelo','Modelo','select',0,[['130','130 (IRPF)'],['303','303 (IVA)'],['390','390 (IVA anual)'],['100','100 (Renta)'],['otro','Otro']]],['periodo','Periodo','text',0,null,'ej: 2026-T2'],['importe','Importe (€)','number'],['fecha_limite','Fecha límite','date'],['pagado','¿Pagado?','check'],['notas','Notas','textarea']]},
   pagos_proximos:{title:'Pago próximo',fields:[['concepto','Concepto','text',1],['importe','Importe (€)','number'],['fecha','Fecha','date'],['recurrente','Frecuencia','select',0,[['unico','Único'],['mensual','Mensual'],['trimestral','Trimestral'],['anual','Anual']]],['pagado','¿Pagado?','check'],['notas','Notas','textarea']]},
 };
