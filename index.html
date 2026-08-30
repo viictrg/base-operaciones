@@ -1322,10 +1322,13 @@ function reservaFor(ingArr,gas){
   const ret=ingArr.reduce((s,m)=>s+irpfAmt(m),0);
   return Math.max(0,ivaR-ivaS)+Math.max(0,(bIng-bGas-amY)*0.20-ret);
 }
-/* IRPF que TODAVÍA debes por esta factura: 20% de pago fraccionado sobre la base,
-   menos lo que el cliente ya te retuvo. No incluye IVA a propósito: se aplica sobre
-   netoIng(), que ya es base sin IVA — sumarlo aquí lo restaría dos veces. */
-function pesoFiscal(m){const base=Number(m.importe)||0;return Math.max(0,base*0.20-irpfAmt(m));}
+/* Carga fiscal estimada del 30%: el Modelo 130 solo adelanta el 20%, pero el tipo
+   efectivo real acaba entre el 24% y el 30%, y lo que falta llega en la Renta de junio.
+   Se usa el 30% para no llevarse sustos. Mismo criterio que la facturación futura. */
+const CARGA_FISCAL=0.30;
+/* IRPF que TODAVÍA debes por esta factura, menos lo que el cliente ya te retuvo.
+   No incluye IVA a propósito: se aplica sobre netoIng(), que ya es base sin IVA. */
+function pesoFiscal(m){const base=Number(m.importe)||0;return Math.max(0,base*CARGA_FISCAL-irpfAmt(m));}
 function fInput(id,field,val,type,w){const v=(val==null?'':esc(val));return `<input class="fcell" type="${type}" value="${v}" style="width:${w}px" onchange="finSet('${id}','${field}',this.value)">`;}
 function finNewFecha(){const q={'T1':'-02-15','T2':'-05-15','T3':'-08-15','T4':'-11-15'}[finPeriod];return q?(finYear+q):todayISO();}
 async function finSet(id,field,value){
@@ -1632,6 +1635,7 @@ function renderFinanzas(){
   const pendiente=ing.filter(m=>m.estado==='pendiente').reduce((s,m)=>s+netoIng(m),0);
   const facturado=cobrado+pendiente;
   const siTodo=ing.reduce((s,m)=>s+netoIng(m),0);
+  const siTodoLimpio=ing.reduce((s,m)=>s+netoIng(m)-pesoFiscal(m),0);
   const gastosTotal=gas.reduce((s,m)=>s+totalGasto(m),0);
   const confirmados=ing.filter(m=>m.estado!=='propuesta');
   const reservaReal=reservaFor(confirmados,gas);
@@ -1665,7 +1669,7 @@ function renderFinanzas(){
       <div class="val" style="color:${dispoHoy<0?'var(--red)':'var(--txt)'}">${eur(dispoHoy)}</div>
       <div style="font-size:.72rem;color:var(--mut2);margin-top:4px">${dispoHoy<0?'⚠️ Ya has tocado dinero que le debes a Hacienda':'Cobrado menos la reserva completa. Lo que puedes gastar sin comerte los impuestos.'}</div>
     </div>
-    <div class="stat"><div class="lbl">📈 Si todo se ejecuta (neto)</div><div class="val" style="color:var(--blue)">${eur(siTodo)}</div></div>
+    <div class="stat"><div class="lbl">📈 Si todo se ejecuta (limpio)</div><div class="val" style="color:var(--blue)">${eur(siTodoLimpio)}</div><div style="font-size:.72rem;color:var(--mut2);margin-top:4px">Incluye propuestas · ya descontado el ${Math.round(CARGA_FISCAL*100)}% de impuestos${siTodo!==siTodoLimpio?` · en bruto ${eur(siTodo)}`:''}</div></div>
     <div class="stat"><div class="lbl">🛡️ Reserva impuestos</div>
       <div style="display:flex;flex-direction:column;gap:4px;margin-top:7px;font-size:.85rem">
         <div style="display:flex;justify-content:space-between;gap:8px"><span style="color:var(--mut)">Confirmado</span><span style="font-weight:800;color:var(--accInk)">${eur(reservaReal)}</span></div>
@@ -1695,7 +1699,7 @@ function renderIngresos(ing){
     <span style="font-size:.74rem;color:var(--mut2)">Edita cualquier celda. Subtotal = base sin IVA · IRPF 15% = retención del cliente · ✅ Hecho = trabajo realizado · 📤 F. env. = factura enviada.</span>
   </div>
   <div style="overflow-x:auto"><table style="min-width:1010px"><thead><tr>
-    <th>Factura</th><th>Concepto</th><th>Fecha</th><th>Trim</th><th class="num">Subtotal</th><th class="num">IVA %</th><th>IRPF 15%</th><th class="num">Bruto</th><th class="num">Neto</th><th class="num" title="Neto menos el IRPF que aún debes por esta factura (20% − retención ya practicada)">Tuyo</th><th title="Trabajo realizado">Hecho</th><th title="Factura enviada">F. env.</th><th>Estado</th><th></th>
+    <th>Factura</th><th>Concepto</th><th>Fecha</th><th>Trim</th><th class="num">Subtotal</th><th class="num">IVA %</th><th>IRPF 15%</th><th class="num">Bruto</th><th class="num">Neto</th><th class="num" title="Neto menos los impuestos estimados de esta factura (30% − retención ya practicada)">Tuyo</th><th title="Trabajo realizado">Hecho</th><th title="Factura enviada">F. env.</th><th>Estado</th><th></th>
   </tr></thead><tbody>
   ${ing.length?ing.map(m=>{const me=mMeta(m);return `<tr class="row-${m.estado}">
     <td>${fInput(m.id,'factura',me.factura||'','text',64)}</td>
