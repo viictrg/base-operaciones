@@ -1350,6 +1350,7 @@ async function finSetCfg(field,value){value=parseFloat(value)||0;let c=(cache.mo
   let d={goal:50000,futuro:0,hacienda:0,gastoFut:0,renta:0};try{Object.assign(d,JSON.parse(c.notas||'{}'));}catch(e){}d[field]=value;await db.update('movimientos',c.id,{notas:JSON.stringify(d)});cache.movimientos=await db.list('movimientos');recUndo(async()=>{await db.update('movimientos',c.id,{notas:oldNotas});cache.movimientos=await db.list('movimientos');renderFinanzas();});renderFinanzas();}
 let gfutOpen=false;
 let fijosOpen=false;
+let rentaOpen=false;
 async function cfgWrite(mut){let c=(cache.movimientos||[]).find(m=>m.tipo==='config');
   if(!c){await db.insert('movimientos',{tipo:'config',concepto:'config',importe:0,iva:0,fecha:todayISO(),estado:'pagado',categoria:'config',amort:false,amort_anios:4,cliente:'',notas:JSON.stringify({goal:50000,futuro:0,hacienda:0,gastoFut:0,renta:0,items:[]})});cache.movimientos=await db.list('movimientos');c=(cache.movimientos).find(m=>m.tipo==='config');}
   const oldNotas=c.notas;
@@ -1585,15 +1586,16 @@ function rentaPanel(){
   const tipoEf=neto>0?irpfAno/neto*100:0;
   const col=saldo>0?'var(--red)':'var(--green)';
   const L=(l,v,s,sub)=>`<div style="display:flex;justify-content:space-between;gap:10px;padding:1px 0"><span style="color:var(--mut)">${l}${sub?`<span style="font-size:.72rem;color:var(--mut2)"> ${sub}</span>`:''}</span><span class="num" style="color:${s<0?'var(--red)':(s>0?'var(--green)':'var(--txt)')}">${s<0?'−':(s>0?'+':'')}${eur(Math.abs(v))}</span></div>`;
-  return `<div class="widget" style="margin-top:24px;border:1.5px solid ${col}">
-    <div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:10px;margin-bottom:4px">
-      <h3 style="font-size:1rem;color:var(--txt);margin:0">🧾 Renta ${yr} · se paga en junio de ${yr+1}</h3>
-      <span style="font-size:.78rem;color:var(--mut2)">Borrador orientativo · tipo efectivo ${tipoEf.toFixed(1)}% · marginal ${tramoMarginal(neto)}%</span>
-    </div>
-    <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin:10px 0 16px">
-      <span style="font-size:2.1rem;font-weight:800;color:${col}">${saldo>0?'':'+'}${eur(Math.abs(saldo))}</span>
-      <span style="color:var(--mut2)">${saldo>0?'te tocará pagar en junio de '+(yr+1):'te saldría a devolver'}</span>
-    </div>
+  return `<div class="widget" style="margin-top:18px">
+    <details ${rentaOpen?'open':''} ontoggle="rentaOpen=this.open">
+    <summary style="cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+      <span style="font-size:.92rem;font-weight:700">🧾 Renta ${yr} <span style="font-size:.72rem;color:var(--mut2);font-weight:400">· se paga en junio de ${yr+1}</span></span>
+      <span style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">
+        <b style="font-size:1.25rem;color:${col}">${saldo>0?'':'+'}${eur(Math.abs(saldo))}</b>
+        <span style="font-size:.72rem;color:var(--mut2)">${saldo>0?'a pagar':'a devolver'} · efectivo ${tipoEf.toFixed(1)}% · marginal ${tramoMarginal(neto)}%</span>
+      </span>
+    </summary>
+    <div style="margin-top:16px">
     <div class="dash-grid">
       <div><div class="lbl" style="margin-bottom:6px">📊 Cómo sale el rendimiento</div>
         <div style="font-size:.84rem;line-height:1.85">
@@ -1621,6 +1623,7 @@ function rentaPanel(){
       <div style="font-size:.72rem;color:var(--mut2);margin-top:8px">Total adelantado en ${yr}: <b style="color:var(--txt)">${eur(pagos130)}</b>${pagos130===0?' — <span style="color:var(--orange)">sin esto el saldo de junio sale muy inflado</span>':''}</div>
     </div>
     <div style="font-size:.74rem;color:var(--mut2);margin-top:12px;line-height:1.55">Los pagos trimestrales del 130 adelantan el <b>20%</b> del beneficio, pero tu tipo efectivo real es del <b>${tipoEf.toFixed(1)}%</b>. Esa diferencia es justo lo que aparece aquí. No incluye deducciones autonómicas ni personales.</div>
+    </div></details>
   </div>`;
 }
 function renderFinanzas(){
@@ -1679,7 +1682,7 @@ function renderFinanzas(){
     <button class="${finTab==='gastos'?'active':''}" onclick="finTab='gastos';renderFinanzas()">Gastos</button>
     <button class="${finTab==='resumen'?'active':''}" onclick="finTab='resumen';renderFinanzas()">Resumen fiscal</button>
     <button class="${finTab==='pagos'?'active':''}" onclick="finTab='pagos';renderFinanzas()">Próximos pagos</button>
-  </div><div id="finBody"></div>${cajaPanel('liq')}${rentaPanel()}${objetivoPanel()}${cajaPanel('fijos')}`;
+  </div><div id="finBody"></div>${cajaPanel('liq')}${objetivoPanel()}${rentaPanel()}${cajaPanel('fijos')}`;
   if(finTab==='ingresos')renderIngresos(ing);
   else if(finTab==='gastos')renderGastos(gas);
   else if(finTab==='resumen')renderResumen();
