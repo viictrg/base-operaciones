@@ -56,6 +56,12 @@
 
   /* MAIN */
   .main{flex:1;min-width:0;padding:28px 32px 80px;max-width:1320px}
+  /* Finanzas aprovecha todo el ancho disponible (monitores ultrawide) */
+  .main:has(.fin-stats){max-width:2400px}
+  .main:has(.fin-stats) table{width:100%}
+  /* En pantallas muy anchas, más columnas de tarjetas en vez de estirarlas */
+  @media(min-width:1500px){.fin-stats{grid-template-columns:repeat(5,1fr)}}
+  @media(min-width:1900px){.fin-stats{grid-template-columns:repeat(6,1fr)}}
   .pagehead{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:20px;flex-wrap:wrap}
   .pagehead h1{font-size:1.55rem;font-weight:700;letter-spacing:-.4px}
   .pagehead p{color:var(--mut);font-size:.84rem;margin-top:3px}
