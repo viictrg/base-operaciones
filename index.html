@@ -1471,13 +1471,10 @@ function cajaPanel(parte){
       <div class="stat"><div class="lbl">💶 Dinero actual en cuenta</div><div style="margin-top:6px">${cajaCell}</div></div>
       <div class="stat"><div class="lbl">📌 Necesito a fin de mes (por pagar)</div><div class="val xl" style="color:var(--orange)">${eur(porPagar)}</div><div style="font-size:.72rem;color:var(--mut2);margin-top:4px">Gastos fijos pendientes + gastos pendientes</div></div>
       <div class="stat"><div class="lbl">🏛️ Impuestos que aún debes</div><div class="val xl" style="color:var(--red)">${eur(impDeuda)}</div><div style="font-size:.72rem;color:var(--mut2);margin-top:4px">${impPagados>0?`Reserva del año menos ${eur(impPagados)} ya liquidados`:'IVA + IRPF de tus facturas de '+yr}</div></div>
-      <div class="stat b2"><div class="lbl">📊 Proyección · actual + por cobrar − por pagar</div><div class="val xl" style="color:${proy>=0?'var(--green)':'var(--red)'}">${eur(proy)}</div><div style="font-size:.72rem;color:var(--mut2);margin-top:4px">${eur(cajaAmt)} + ${eur(porCobrar)} por cobrar − ${eur(porPagar)} por pagar · <b style="color:var(--orange)">sin descontar impuestos</b></div></div>
+      <div class="stat b2" style="border:1.5px solid ${tuyo>=0?'var(--green)':'var(--red)'}"><div class="lbl">💰 Proyección limpia · dinero tuyo de verdad</div><div class="val xl" style="color:${tuyo>=0?'var(--green)':'var(--red)'}">${eur(tuyo)}</div><div style="font-size:.72rem;color:var(--mut2);margin-top:4px">${eur(cajaAmt)} + ${eur(porCobrar)} por cobrar − ${eur(porPagar)} por pagar − ${eur(impDeuda)} impuestos${proy!==tuyo?` · <span style="color:var(--mut2)">antes de impuestos serían ${eur(proy)}</span>`:''}</div></div>
     </div>
-    <div style="background:var(--inset);border:1.5px solid ${tuyo>=0?'var(--green)':'var(--red)'};border-radius:var(--radius);padding:16px 18px;margin-bottom:18px">
-      <div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:10px;margin-bottom:12px">
-        <span style="font-size:.9rem;font-weight:700">💰 Dinero tuyo de verdad</span>
-        <span style="font-size:2rem;font-weight:800;color:${tuyo>=0?'var(--green)':'var(--red)'}">${eur(tuyo)}</span>
-      </div>
+    <div style="background:var(--inset);border:1px solid var(--line);border-radius:var(--radius);padding:14px 18px;margin-bottom:18px">
+      <div style="font-size:.86rem;font-weight:700;margin-bottom:10px">📊 De dónde sale ese número</div>
       <div style="font-size:.84rem;line-height:1.9;border-top:1px solid var(--line);padding-top:10px">
         ${[['Dinero actual en cuenta',cajaAmt,0],['Por cobrar (te lo deben)',porCobrar,1],['Gastos fijos y variables pendientes',porPagar,-1],['Impuestos que aún debes',impDeuda,-1]].map(([l,v,s])=>`<div style="display:flex;justify-content:space-between;gap:10px"><span style="color:var(--mut)">${l}</span><span class="num" style="color:${s<0?'var(--red)':(s>0?'var(--green)':'var(--txt)')}">${s<0?'−':(s>0?'+':'')}${eur(Math.abs(v))}</span></div>`).join('')}
         <div style="border-top:1px solid var(--line);margin-top:8px;padding-top:8px;display:flex;justify-content:space-between"><b>Tuyo de verdad</b><b class="num" style="color:${tuyo>=0?'var(--green)':'var(--red)'}">${eur(tuyo)}</b></div>
