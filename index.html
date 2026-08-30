@@ -1460,7 +1460,7 @@ function cajaPanel(parte){
   const yr=finYear;
   const ingY=mov.filter(m=>m.tipo==='ingreso'&&yOf(m.fecha)===yr&&m.estado!=='propuesta');
   const gasY=mov.filter(m=>m.tipo==='gasto'&&yOf(m.fecha)===yr);
-  const impPagados=(cache.impuestos||[]).filter(i=>i.pagado&&yOf(i.fecha_limite)===yr).reduce((s,i)=>s+(Number(i.importe)||0),0);
+  const impPagados=(cache.impuestos||[]).filter(i=>i.pagado&&impDelAno(i,yr)).reduce((s,i)=>s+(Number(i.importe)||0),0);
   const impDeuda=Math.max(0,reservaFor(ingY,gasY)-impPagados);
   const tuyo=proy-impDeuda;
   const cajaCell=caja?`<input class="fcell" type="number" value="${cajaAmt}" style="width:150px;font-size:1.5rem;font-weight:800;padding:4px 8px" onchange="finSet('${caja.id}','importe',this.value)">`:`<button class="btn sm" onclick="ensureCaja()">+ Definir saldo</button>`;
@@ -1517,6 +1517,28 @@ function cajaPanel(parte){
    ============================================================ */
 const MIN_PERSONAL=5550;
 function tramoMarginal(n){return n<=12450?19:n<=20200?24:n<=35200?30:n<=60000?37:n<=300000?45:47;}
+/* Un impuesto pertenece al ejercicio yr si su periodo empieza por ese año.
+   Se mira el periodo y no fecha_limite porque el 130 del T4 vence en enero del año siguiente. */
+function impDelAno(i,yr){const p=String(i.periodo||'');return p.startsWith(String(yr))||(!p&&yOf(i.fecha_limite)===yr);}
+function m130Find(q){return (cache.impuestos||[]).find(i=>String(i.modelo)==='130'&&String(i.periodo||'')===finYear+'-T'+q);}
+const M130_LIMITES=q=>[finYear+'-04-20',finYear+'-07-20',finYear+'-10-20',(finYear+1)+'-01-20'][q-1];
+async function m130Set(q,field,value){
+  const v=field==='pagado'?!!value:(parseFloat(value)||0);
+  let r=m130Find(q);
+  if(!r){
+    await db.insert('impuestos',{modelo:'130',periodo:finYear+'-T'+q,importe:field==='importe'?v:0,fecha_limite:M130_LIMITES(q),pagado:field==='pagado'?v:false,notas:''});
+  }else{
+    await db.update('impuestos',r.id,{[field]:v});
+  }
+  cache.impuestos=await db.list('impuestos');renderFinanzas();
+}
+/* Rellena el importe con lo que la app calcula para ese trimestre y lo marca pagado. */
+async function m130UsarCalc(q,importe){
+  let r=m130Find(q);
+  if(!r){await db.insert('impuestos',{modelo:'130',periodo:finYear+'-T'+q,importe:importe,fecha_limite:M130_LIMITES(q),pagado:true,notas:''});}
+  else{await db.update('impuestos',r.id,{importe:importe,pagado:true});}
+  cache.impuestos=await db.list('impuestos');renderFinanzas();
+}
 function rentaPanel(){
   const mov=cache.movimientos||[];const yr=finYear;
   const ing=mov.filter(m=>m.tipo==='ingreso'&&yOf(m.fecha)===yr&&m.estado!=='propuesta');
@@ -1531,7 +1553,26 @@ function rentaPanel(){
   const irpfAno=Math.max(0,irpfEstimate(Math.max(0,neto))-MIN_PERSONAL*0.19);
   const reten=ing.reduce((s,m)=>s+irpfAmt(m),0);
   const imp=cache.impuestos||[];
-  const pagos130=imp.filter(i=>String(i.modelo)==='130'&&i.pagado&&yOf(i.fecha_limite)===yr).reduce((s,i)=>s+(Number(i.importe)||0),0);
+  const pagos130=imp.filter(i=>String(i.modelo)==='130'&&i.pagado&&impDelAno(i,yr)).reduce((s,i)=>s+(Number(i.importe)||0),0);
+  /* Lo que la app calcula que tocaba pagar cada trimestre (acumulativo, como el 130 real) */
+  const Q={};for(let q=1;q<=4;q++)Q[q]={ing:0,gas:0,am:0,ret:0};
+  ing.forEach(m=>{const q=qOf(m.fecha);if(Q[q]){Q[q].ing+=Number(m.importe)||0;Q[q].ret+=irpfAmt(m);}});
+  gas.forEach(m=>{const q=qOf(m.fecha);if(Q[q]){if(m.amort)Q[q].am+=amortAnual(m);else Q[q].gas+=Number(m.importe)||0;}});
+  const calc={};{let acc=0,iA=0,gA=0,aA=0,rA=0;
+    for(let q=1;q<=4;q++){iA+=Q[q].ing;gA+=Q[q].gas;aA+=Q[q].am;rA+=Q[q].ret;
+      const due=Math.max(0,(iA-gA-aA)*0.20-rA);const pay=Math.max(0,due-acc);acc+=pay;calc[q]=pay;}}
+  const qActual=Math.floor(new Date().getMonth()/3)+1;
+  const gridQ=[1,2,3,4].map(q=>{const r=m130Find(q);const pagado=!!(r&&r.pagado);const importe=r?(Number(r.importe)||0):0;
+    const futuro=(yr>new Date().getFullYear())||(yr===new Date().getFullYear()&&q>qActual);
+    return `<div style="border:1px solid ${pagado?'var(--green)':(futuro?'var(--line)':'var(--orange)')};border-radius:9px;padding:9px 11px;background:var(--inset)">
+      <label style="display:flex;align-items:center;gap:7px;cursor:${futuro?'default':'pointer'};margin-bottom:6px">
+        <input type="checkbox" ${pagado?'checked':''} ${futuro?'disabled':''} onchange="m130Set(${q},'pagado',this.checked)" style="width:auto">
+        <b style="font-size:.86rem">T${q}</b>
+        <span style="font-size:.7rem;color:var(--mut2);margin-left:auto">${futuro?'aún no toca':(pagado?'✅ pagado':'⏳ pendiente')}</span>
+      </label>
+      <input class="fcell" type="number" value="${importe||''}" placeholder="0" style="width:100%" onchange="m130Set(${q},'importe',this.value)">
+      ${calc[q]>0&&Math.abs(calc[q]-importe)>1?`<div style="margin-top:5px"><button class="btn sm" style="font-size:.68rem;padding:2px 7px" onclick="m130UsarCalc(${q},${calc[q].toFixed(2)})">usar ${eur(calc[q])}</button></div>`:`<div style="font-size:.68rem;color:var(--mut2);margin-top:5px">calculado ${eur(calc[q])}</div>`}
+    </div>`;}).join('');
   const saldo=irpfAno-reten-pagos130;
   const tipoEf=neto>0?irpfAno/neto*100:0;
   const col=saldo>0?'var(--red)':'var(--green)';
@@ -1566,7 +1607,11 @@ function rentaPanel(){
         </div>
       </div>
     </div>
-    ${pagos130===0?`<div style="background:#2a1a00;border:1px solid var(--orange);border-radius:9px;padding:9px 12px;margin-top:14px;font-size:.8rem;line-height:1.5">⚠️ No tienes ningún <b>Modelo 130 marcado como pagado</b> en ${yr}. Mételos en la pestaña de Impuestos o este número saldrá mucho más alto de lo real.</div>`:''}
+    <div style="margin-top:16px;border-top:1px solid var(--line);padding-top:14px">
+      <div class="lbl" style="margin-bottom:8px">📅 Modelos 130 de ${yr} <span style="font-size:.72rem;color:var(--mut2);font-weight:400">— marca los que ya has pagado y escribe el importe</span></div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:9px">${gridQ}</div>
+      <div style="font-size:.72rem;color:var(--mut2);margin-top:8px">Total adelantado en ${yr}: <b style="color:var(--txt)">${eur(pagos130)}</b>${pagos130===0?' — <span style="color:var(--orange)">sin esto el saldo de junio sale muy inflado</span>':''}</div>
+    </div>
     <div style="font-size:.74rem;color:var(--mut2);margin-top:12px;line-height:1.55">Los pagos trimestrales del 130 adelantan el <b>20%</b> del beneficio, pero tu tipo efectivo real es del <b>${tipoEf.toFixed(1)}%</b>. Esa diferencia es justo lo que aparece aquí. No incluye deducciones autonómicas ni personales.</div>
   </div>`;
 }
