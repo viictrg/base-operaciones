@@ -1522,13 +1522,19 @@ function tramoMarginal(n){return n<=12450?19:n<=20200?24:n<=35200?30:n<=60000?37
 function impDelAno(i,yr){const p=String(i.periodo||'');return p.startsWith(String(yr))||(!p&&yOf(i.fecha_limite)===yr);}
 function m130Find(q){return (cache.impuestos||[]).find(i=>String(i.modelo)==='130'&&String(i.periodo||'')===finYear+'-T'+q);}
 const M130_LIMITES=q=>[finYear+'-04-20',finYear+'-07-20',finYear+'-10-20',(finYear+1)+'-01-20'][q-1];
-async function m130Set(q,field,value){
+async function m130Set(q,field,value,calcAmt){
   const v=field==='pagado'?!!value:(parseFloat(value)||0);
+  const suger=Number(calcAmt)||0;
   let r=m130Find(q);
   if(!r){
-    await db.insert('impuestos',{modelo:'130',periodo:finYear+'-T'+q,importe:field==='importe'?v:0,fecha_limite:M130_LIMITES(q),pagado:field==='pagado'?v:false,notas:''});
+    /* Al marcar pagado sin importe, se rellena con lo calculado: si no, quedaría
+       en 0 y el total de adelantos no se movería (parecería que no hace nada). */
+    const imp=field==='importe'?v:(v===true?suger:0);
+    await db.insert('impuestos',{modelo:'130',periodo:finYear+'-T'+q,importe:imp,fecha_limite:M130_LIMITES(q),pagado:field==='pagado'?v:false,notas:''});
   }else{
-    await db.update('impuestos',r.id,{[field]:v});
+    const patch={[field]:v};
+    if(field==='pagado'&&v===true&&!(Number(r.importe)||0)&&suger>0)patch.importe=suger;
+    await db.update('impuestos',r.id,patch);
   }
   cache.impuestos=await db.list('impuestos');renderFinanzas();
 }
@@ -1566,12 +1572,14 @@ function rentaPanel(){
     const futuro=(yr>new Date().getFullYear())||(yr===new Date().getFullYear()&&q>qActual);
     return `<div style="border:1px solid ${pagado?'var(--green)':(futuro?'var(--line)':'var(--orange)')};border-radius:9px;padding:9px 11px;background:var(--inset)">
       <label style="display:flex;align-items:center;gap:7px;cursor:${futuro?'default':'pointer'};margin-bottom:6px">
-        <input type="checkbox" ${pagado?'checked':''} ${futuro?'disabled':''} onchange="m130Set(${q},'pagado',this.checked)" style="width:auto">
+        <input type="checkbox" ${pagado?'checked':''} ${futuro?'disabled':''} onchange="m130Set(${q},'pagado',this.checked,${calc[q].toFixed(2)})" style="width:auto">
         <b style="font-size:.86rem">T${q}</b>
         <span style="font-size:.7rem;color:var(--mut2);margin-left:auto">${futuro?'aún no toca':(pagado?'✅ pagado':'⏳ pendiente')}</span>
       </label>
-      <input class="fcell" type="number" value="${importe||''}" placeholder="0" style="width:100%" onchange="m130Set(${q},'importe',this.value)">
-      ${calc[q]>0&&Math.abs(calc[q]-importe)>1?`<div style="margin-top:5px"><button class="btn sm" style="font-size:.68rem;padding:2px 7px" onclick="m130UsarCalc(${q},${calc[q].toFixed(2)})">usar ${eur(calc[q])}</button></div>`:`<div style="font-size:.68rem;color:var(--mut2);margin-top:5px">calculado ${eur(calc[q])}</div>`}
+      <input class="fcell" type="number" value="${importe||''}" placeholder="escribe el importe" style="width:100%;${pagado&&!importe?'border-color:var(--orange)':''}" onchange="m130Set(${q},'importe',this.value)">
+      ${pagado&&!importe?`<div style="font-size:.68rem;color:var(--orange);margin-top:5px">⚠️ Marcado pagado pero sin importe — escríbelo aquí arriba</div>`
+        :calc[q]>0&&Math.abs(calc[q]-importe)>1?`<div style="margin-top:5px"><button class="btn sm" style="font-size:.68rem;padding:2px 7px" onclick="m130UsarCalc(${q},${calc[q].toFixed(2)})">usar ${eur(calc[q])}</button></div>`
+        :`<div style="font-size:.68rem;color:var(--mut2);margin-top:5px">calculado ${eur(calc[q])}</div>`}
     </div>`;}).join('');
   const saldo=irpfAno-reten-pagos130;
   const tipoEf=neto>0?irpfAno/neto*100:0;
