@@ -1511,6 +1511,65 @@ function cajaPanel(parte){
     </div></details>
   </div>`;
 }
+/* ============================================================
+   RENTA · borrador de la declaración que se paga en junio del año siguiente.
+   Ojo: el mínimo personal se resta de la CUOTA (5.550 × 19%), no de la base.
+   ============================================================ */
+const MIN_PERSONAL=5550;
+function tramoMarginal(n){return n<=12450?19:n<=20200?24:n<=35200?30:n<=60000?37:n<=300000?45:47;}
+function rentaPanel(){
+  const mov=cache.movimientos||[];const yr=finYear;
+  const ing=mov.filter(m=>m.tipo==='ingreso'&&yOf(m.fecha)===yr&&m.estado!=='propuesta');
+  const gas=mov.filter(m=>m.tipo==='gasto'&&yOf(m.fecha)===yr);
+  const bIng=ing.reduce((s,m)=>s+(Number(m.importe)||0),0);
+  const bGas=gas.filter(m=>!m.amort).reduce((s,m)=>s+(Number(m.importe)||0),0);
+  const amort=gas.filter(m=>m.amort).reduce((s,m)=>s+amortAnual(m),0);
+  const fijos=mov.filter(m=>m.tipo==='fijo');
+  const fDesgMes=fijos.filter(m=>mMeta(m).desg).reduce((s,m)=>s+(Number(m.importe)||0),0);
+  const fDesgAno=fDesgMes*12;
+  const neto=bIng-bGas-amort-fDesgAno;
+  const irpfAno=Math.max(0,irpfEstimate(Math.max(0,neto))-MIN_PERSONAL*0.19);
+  const reten=ing.reduce((s,m)=>s+irpfAmt(m),0);
+  const imp=cache.impuestos||[];
+  const pagos130=imp.filter(i=>String(i.modelo)==='130'&&i.pagado&&yOf(i.fecha_limite)===yr).reduce((s,i)=>s+(Number(i.importe)||0),0);
+  const saldo=irpfAno-reten-pagos130;
+  const tipoEf=neto>0?irpfAno/neto*100:0;
+  const col=saldo>0?'var(--red)':'var(--green)';
+  const L=(l,v,s,sub)=>`<div style="display:flex;justify-content:space-between;gap:10px;padding:1px 0"><span style="color:var(--mut)">${l}${sub?`<span style="font-size:.72rem;color:var(--mut2)"> ${sub}</span>`:''}</span><span class="num" style="color:${s<0?'var(--red)':(s>0?'var(--green)':'var(--txt)')}">${s<0?'−':(s>0?'+':'')}${eur(Math.abs(v))}</span></div>`;
+  return `<div class="widget" style="margin-top:24px;border:1.5px solid ${col}">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:10px;margin-bottom:4px">
+      <h3 style="font-size:1rem;color:var(--txt);margin:0">🧾 Renta ${yr} · se paga en junio de ${yr+1}</h3>
+      <span style="font-size:.78rem;color:var(--mut2)">Borrador orientativo · tipo efectivo ${tipoEf.toFixed(1)}% · marginal ${tramoMarginal(neto)}%</span>
+    </div>
+    <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin:10px 0 16px">
+      <span style="font-size:2.1rem;font-weight:800;color:${col}">${saldo>0?'':'+'}${eur(Math.abs(saldo))}</span>
+      <span style="color:var(--mut2)">${saldo>0?'te tocará pagar en junio de '+(yr+1):'te saldría a devolver'}</span>
+    </div>
+    <div class="dash-grid">
+      <div><div class="lbl" style="margin-bottom:6px">📊 Cómo sale el rendimiento</div>
+        <div style="font-size:.84rem;line-height:1.85">
+          ${L('Facturado (base sin IVA)',bIng,1)}
+          ${L('Gastos deducibles',bGas,-1)}
+          ${amort>0?L('Amortizaciones del año',amort,-1):''}
+          ${fDesgAno>0?L('Gastos fijos desgravables',fDesgAno,-1,`(${eur(fDesgMes)}/mes × 12)`):''}
+          <div style="border-top:1px solid var(--line);margin-top:6px;padding-top:6px;display:flex;justify-content:space-between"><b>Rendimiento neto</b><b class="num">${eur(neto)}</b></div>
+        </div>
+      </div>
+      <div><div class="lbl" style="margin-bottom:6px">🏛️ Cómo sale el impuesto</div>
+        <div style="font-size:.84rem;line-height:1.85">
+          ${L('IRPF por tramos sobre el rendimiento',irpfEstimate(Math.max(0,neto)),-1)}
+          ${L('Mínimo personal',MIN_PERSONAL*0.19,1,'(5.550 × 19%)')}
+          <div style="border-top:1px solid var(--line);margin:6px 0;padding-top:6px;display:flex;justify-content:space-between"><b>IRPF del año</b><b class="num">${eur(irpfAno)}</b></div>
+          ${L('Retenciones de tus clientes',reten,1)}
+          ${L('Modelos 130 ya pagados',pagos130,1)}
+          <div style="border-top:1px solid var(--line);margin-top:6px;padding-top:6px;display:flex;justify-content:space-between"><b>${saldo>0?'A pagar':'A devolver'}</b><b class="num" style="color:${col}">${eur(Math.abs(saldo))}</b></div>
+        </div>
+      </div>
+    </div>
+    ${pagos130===0?`<div style="background:#2a1a00;border:1px solid var(--orange);border-radius:9px;padding:9px 12px;margin-top:14px;font-size:.8rem;line-height:1.5">⚠️ No tienes ningún <b>Modelo 130 marcado como pagado</b> en ${yr}. Mételos en la pestaña de Impuestos o este número saldrá mucho más alto de lo real.</div>`:''}
+    <div style="font-size:.74rem;color:var(--mut2);margin-top:12px;line-height:1.55">Los pagos trimestrales del 130 adelantan el <b>20%</b> del beneficio, pero tu tipo efectivo real es del <b>${tipoEf.toFixed(1)}%</b>. Esa diferencia es justo lo que aparece aquí. No incluye deducciones autonómicas ni personales.</div>
+  </div>`;
+}
 function renderFinanzas(){
   const mov=cache.movimientos||[];const yr=finYear;
   const inPer=m=>finPeriod==='año'||('T'+qOf(m.fecha))===finPeriod;
@@ -1567,7 +1626,7 @@ function renderFinanzas(){
     <button class="${finTab==='gastos'?'active':''}" onclick="finTab='gastos';renderFinanzas()">Gastos</button>
     <button class="${finTab==='resumen'?'active':''}" onclick="finTab='resumen';renderFinanzas()">Resumen fiscal</button>
     <button class="${finTab==='pagos'?'active':''}" onclick="finTab='pagos';renderFinanzas()">Próximos pagos</button>
-  </div><div id="finBody"></div>${cajaPanel('liq')}${objetivoPanel()}${cajaPanel('fijos')}`;
+  </div><div id="finBody"></div>${cajaPanel('liq')}${rentaPanel()}${objetivoPanel()}${cajaPanel('fijos')}`;
   if(finTab==='ingresos')renderIngresos(ing);
   else if(finTab==='gastos')renderGastos(gas);
   else if(finTab==='resumen')renderResumen();
@@ -1652,7 +1711,7 @@ function renderResumen(){
     <td><b>T${q}</b></td><td class="num">${eur(Q[q].ing)}</td><td class="num">${eur(Q[q].ivaR)}</td><td class="num">${eur(Q[q].gas+Q[q].amort)}</td><td class="num">${eur(Q[q].ivaS)}</td>
     <td class="num" style="color:${iva303>=0?'var(--orange)':'var(--green)'}">${iva303<0?'−':''}${eur(Math.abs(iva303))}${iva303<0?' (a favor)':''}</td>
     <td class="num">${eur(Q[q].reten)}</td><td class="num">${eur(ben)}</td><td class="num" style="color:${m130[q]>0?'var(--orange)':'var(--mut)'}">${eur(m130[q])}</td></tr>`;};
-  const ingA=iY,gasA=gY,benA=iY-gY-aY,irpf=irpfEstimate(benA-5550);
+  const ingA=iY,gasA=gY,benA=iY-gY-aY,irpf=Math.max(0,irpfEstimate(Math.max(0,benA))-MIN_PERSONAL*0.19);
   $('#finBody').innerHTML=`
   <div class="banner">⚠️ <b>Estimación orientativa, no es asesoramiento fiscal.</b> IVA 21%, estimación directa, pago fraccionado 20%. Confírmalo con tu gestor.</div>
   <div style="overflow-x:auto"><table style="min-width:820px"><thead><tr>
@@ -1721,7 +1780,7 @@ function renderFiscal(){
   let acc130=0,ingYTD=0,gasYTD=0;const m130={};
   for(let q=1;q<=4;q++){ingYTD+=Q[q].ing;gasYTD+=Q[q].gas;const amortYTD=amortYear*q/4;const ben=ingYTD-gasYTD-amortYTD;const due=Math.max(0,ben*0.20);const pay=Math.max(0,due-acc130);acc130+=pay;m130[q]=pay;}
   const ingA=Q[1].ing+Q[2].ing+Q[3].ing+Q[4].ing, gasA=Q[1].gas+Q[2].gas+Q[3].gas+Q[4].gas;
-  const ben=ingA-gasA-amortYear, irpf=irpfEstimate(ben-5550);
+  const ben=ingA-gasA-amortYear, irpf=Math.max(0,irpfEstimate(Math.max(0,ben))-MIN_PERSONAL*0.19);
   const cards=[1,2,3,4].map(q=>{const iva303=Q[q].ivaR-Q[q].ivaS;return `<div class="stat"><div class="lbl">T${q} · ${yr}</div>
     <div style="font-size:.72rem;color:var(--mut);margin-top:9px">Modelo 130 (IRPF)</div><div class="val" style="font-size:1.15rem;color:${m130[q]>0?'var(--orange)':'var(--green)'}">${eur(m130[q])}</div>
     <div style="font-size:.72rem;color:var(--mut);margin-top:9px">Modelo 303 (IVA)</div><div class="val" style="font-size:1.15rem;color:${iva303>=0?'var(--orange)':'var(--green)'}">${iva303<0?'a favor ':''}${eur(Math.abs(iva303))}</div></div>`;}).join('');
