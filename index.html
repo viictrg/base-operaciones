@@ -1313,15 +1313,16 @@ function mMeta(m){try{const o=JSON.parse(m.notas||'{}');return (o&&typeof o==='o
 /* ═══ MODELO DE CIFRAS · tres conceptos y solo tres ═══════════════════════
    BASE   (m.importe)  Base imponible. Tu volumen de negocio.
    BRUTO  base + IVA − retención.  Lo que ENTRA en tu banco.
-   NETO   base × (1 − 30%).  TUYO DE VERDAD, ya liquidado con Hacienda.
+   NETO   base × (1 − tipo efectivo).  TUYO DE VERDAD, ya liquidado con Hacienda.
 
    bruto − neto = exactamente lo que le debes a Hacienda por esa factura:
-   el IVA que cobras en su nombre + el IRPF que falta hasta el 30%.
+   el IVA que cobras en su nombre + el IRPF que falta hasta tu tipo efectivo.
 
    Funciona igual con cliente español y con extranjero:
-     España   base 800 + IVA 168 − ret. 120 = bruto 848 → neto 800×0,70 = 560
-              (de los 848 devuelves 168 de IVA y 120 de IRPF que aún faltan)
-     Andorra  base 1000, sin IVA ni retención = bruto 1000 → neto 700
+     Con un tipo efectivo del 20%:
+     España   base 800 + IVA 168 − ret. 120 = bruto 848 → neto 800×0,80 = 640
+     Andorra  base 1000, sin IVA ni retención = bruto 1000 → neto 800
+     El tipo NO es fijo: lo calcula cargaFiscal() con los tramos reales del IRPF.
    ═══════════════════════════════════════════════════════════════════════ */
 const MIN_PERSONAL=5550;
 const CARGA_MIN=0.20;   // suelo: a principios de año, con poco facturado, no bajar de aquí
@@ -1410,14 +1411,27 @@ function objetivoPanel(){
   const propuestas=propsY.reduce((s,m)=>s+(Number(m.importe)||0),0);
   const futExtra=Number(cfg.futuro)||0;
   const futuro=propuestas+futExtra;
-  const _netoY=ingY.filter(m=>m.estado!=='propuesta').reduce((s,m)=>s+(Number(m.importe)||0),0)-gasY.reduce((s,m)=>s+(Number(m.importe)||0),0);
-  const tipoFut=tramoMarginal(Math.max(0,_netoY))/100; // marginal: la facturación futura va encima de lo ya facturado
-  const futTax=Math.max(0,futuro)*tipoFut;
+  /* Impuesto de la facturación futura, calculado por TRAMOS y de forma incremental:
+     IRPF(rendimiento + futuro) − IRPF(rendimiento). Así respeta los saltos de tramo:
+     si la facturación futura te cruza de un tramo al siguiente, una parte tributa al
+     tipo viejo y otra al nuevo, en vez de aplicar un porcentaje plano a todo. */
+  const _baseY=ingY.filter(m=>m.estado!=='propuesta').reduce((s,m)=>s+(Number(m.importe)||0),0);
+  const _gasNoAm=gasY.filter(m=>!m.amort).reduce((s,m)=>s+(Number(m.importe)||0),0);
+  const _amY=gasY.filter(m=>m.amort).reduce((s,m)=>s+amortAnual(m),0);
+  const _fDesgY=mov.filter(m=>m.tipo==='fijo'&&mMeta(m).desg).reduce((s,m)=>s+(Number(m.importe)||0),0)*12;
+  const _netoY=Math.max(0,_baseY-_gasNoAm-_amY-_fDesgY);
+  const _irpfSin=Math.max(0,irpfEstimate(_netoY)-MIN_PERSONAL*0.19);
+  const _irpfCon=Math.max(0,irpfEstimate(_netoY+Math.max(0,futuro))-MIN_PERSONAL*0.19);
+  const futTax=Math.max(0,_irpfCon-_irpfSin);
+  const tipoFutEf=futuro>0?futTax/futuro:0;
   const reserva=reservaBase+futTax;
   const proy=saldo+porCobrar+futuro+(cfg.renta||0)-fijoRest-gastoPend-gfTotal-cfg.hacienda-reserva;
   const goal=cfg.goal||50000;const pct=goal>0?Math.max(0,Math.min(100,proy/goal*100)):0;
   const baseNoFut=proy-(futuro-futTax); // proyección sin contar la facturación futura
-  const reqTotal=Math.max(0,(goal-baseNoFut)/0.70); // facturación bruta necesaria (descontando ~30% impuestos)
+  /* Facturación bruta necesaria para llegar a la meta. Cada euro extra que factures
+     tributa a tu tipo MARGINAL (va encima de lo ya facturado), así que te queda (1−marginal). */
+  const _margFut=tramoMarginal(_netoY)/100;
+  const reqTotal=Math.max(0,(goal-baseNoFut)/(1-_margFut));
   const reqMes=mesesRest>0?reqTotal/mesesRest:0;
   const gap=goal-proy;const porMes=mesesRest>0&&gap>0?gap/mesesRest:0;
   const col=proy>=goal?'var(--green)':(proy>=goal*0.6?'var(--orange)':'var(--red)');
@@ -1445,7 +1459,7 @@ function objetivoPanel(){
         ${line('Hacienda (provisión)',cfg.hacienda,-1)}
         ${(cfg.renta||0)!==0?line('Renta 2025 ('+((cfg.renta||0)>=0?'te devuelven':'a pagar')+')',Math.abs(cfg.renta||0),(cfg.renta||0)>=0?1:-1):''}
         ${line('Reserva impuestos (facturas actuales)',reservaBase,-1)}
-        ${line('Impuestos de tu facturación futura',futTax,-1)}
+        ${line(`Impuestos de tu facturación futura${futuro>0?` <span style="font-size:.72rem;color:var(--mut2)">(${(tipoFutEf*100).toFixed(1)}% por tramos)</span>`:''}`,futTax,-1)}
         <div style="border-top:1px solid var(--line);margin-top:6px;padding-top:6px;display:flex;justify-content:space-between"><b>Proyección a 31 dic</b><b class="num" style="color:${col}">${eur(proy)}</b></div>
       </div>
       <div><div class="lbl" style="margin-bottom:6px">✏️ Ajusta tus supuestos</div>
@@ -1667,7 +1681,7 @@ function renderFinanzas(){
   const ing=mov.filter(m=>m.tipo==='ingreso'&&yOf(m.fecha)===yr&&inPer(m));
   const gas=mov.filter(m=>m.tipo==='gasto'&&yOf(m.fecha)===yr&&inPer(m));
   const cobradosArr=ing.filter(m=>m.estado==='cobrado'), pendArr=ing.filter(m=>m.estado==='pendiente');
-  /* NETO = tuyo de verdad. No se le vuelve a restar la reserva: ya lleva el 30% dentro. */
+  /* NETO = tuyo de verdad. No se le vuelve a restar la reserva: ya lleva los impuestos dentro. */
   const cobrado=cobradosArr.reduce((s,m)=>s+netoIng(m),0);
   const pendiente=pendArr.reduce((s,m)=>s+netoIng(m),0);
   const netoPeriodo=cobrado+pendiente;
@@ -1732,7 +1746,7 @@ function renderIngresos(ing){
     <span style="font-size:.74rem;color:var(--mut2)">Edita cualquier celda. Subtotal = base sin IVA · IRPF 15% = retención del cliente · ✅ Hecho = trabajo realizado · 📤 F. env. = factura enviada.</span>
   </div>
   <div style="overflow-x:auto"><table style="min-width:1010px"><thead><tr>
-    <th>Factura</th><th>Concepto</th><th>Fecha</th><th>Trim</th><th class="num">Subtotal</th><th class="num">IVA %</th><th>IRPF 15%</th><th class="num" title="Lo que entra en tu banco: base + IVA − retención">Bruto</th><th class="num" title="Tuyo de verdad: base − 30% de impuestos">Neto</th><th title="Trabajo realizado">Hecho</th><th title="Factura enviada">F. env.</th><th>Estado</th><th></th>
+    <th>Factura</th><th>Concepto</th><th>Fecha</th><th>Trim</th><th class="num">Subtotal</th><th class="num">IVA %</th><th>IRPF 15%</th><th class="num" title="Lo que entra en tu banco: base + IVA − retención">Bruto</th><th class="num" title="Tuyo de verdad: base menos tu tipo efectivo de IRPF, calculado por tramos">Neto</th><th title="Trabajo realizado">Hecho</th><th title="Factura enviada">F. env.</th><th>Estado</th><th></th>
   </tr></thead><tbody>
   ${ing.length?ing.map(m=>{const me=mMeta(m);return `<tr class="row-${m.estado}">
     <td>${fInput(m.id,'factura',me.factura||'','text',64)}</td>
