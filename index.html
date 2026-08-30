@@ -1452,13 +1452,33 @@ function cajaPanel(){
   const porCobrar=mov.filter(m=>m.tipo==='ingreso'&&m.estado==='pendiente').reduce((s,m)=>s+netoIng(m),0);
   const gPend=mov.filter(m=>m.tipo==='gasto'&&m.estado==='pendiente').reduce((s,m)=>s+totalGasto(m),0);
   const porPagar=fPend+gPend;const proy=cajaAmt+porCobrar-porPagar;
+  /* Impuestos que aún debes: la reserva del año menos lo que ya has liquidado.
+     Las retenciones de clientes ya van descontadas dentro de reservaFor(). */
+  const yr=finYear;
+  const ingY=mov.filter(m=>m.tipo==='ingreso'&&yOf(m.fecha)===yr&&m.estado!=='propuesta');
+  const gasY=mov.filter(m=>m.tipo==='gasto'&&yOf(m.fecha)===yr);
+  const impPagados=(cache.impuestos||[]).filter(i=>i.pagado&&yOf(i.fecha_limite)===yr).reduce((s,i)=>s+(Number(i.importe)||0),0);
+  const impDeuda=Math.max(0,reservaFor(ingY,gasY)-impPagados);
+  const tuyo=proy-impDeuda;
   const cajaCell=caja?`<input class="fcell" type="number" value="${cajaAmt}" style="width:150px;font-size:1.5rem;font-weight:800;padding:4px 8px" onchange="finSet('${caja.id}','importe',this.value)">`:`<button class="btn sm" onclick="ensureCaja()">+ Definir saldo</button>`;
   return `<div class="widget" style="margin-top:24px">
     <h3 style="font-size:1rem;color:var(--txt);margin-bottom:16px">🏦 Caja · liquidez y gastos fijos</h3>
     <div class="fin-stats" style="margin-bottom:18px">
       <div class="stat"><div class="lbl">💶 Dinero actual en cuenta</div><div style="margin-top:6px">${cajaCell}</div></div>
       <div class="stat"><div class="lbl">📌 Necesito a fin de mes (por pagar)</div><div class="val xl" style="color:var(--orange)">${eur(porPagar)}</div><div style="font-size:.72rem;color:var(--mut2);margin-top:4px">Gastos fijos pendientes + gastos pendientes</div></div>
-      <div class="stat b2"><div class="lbl">📊 Proyección · actual + por cobrar − por pagar</div><div class="val xl" style="color:${proy>=0?'var(--green)':'var(--red)'}">${eur(proy)}</div><div style="font-size:.72rem;color:var(--mut2);margin-top:4px">${eur(cajaAmt)} + ${eur(porCobrar)} por cobrar − ${eur(porPagar)} por pagar</div></div>
+      <div class="stat"><div class="lbl">🏛️ Impuestos que aún debes</div><div class="val xl" style="color:var(--red)">${eur(impDeuda)}</div><div style="font-size:.72rem;color:var(--mut2);margin-top:4px">${impPagados>0?`Reserva del año menos ${eur(impPagados)} ya liquidados`:'IVA + IRPF de tus facturas de '+yr}</div></div>
+      <div class="stat b2"><div class="lbl">📊 Proyección · actual + por cobrar − por pagar</div><div class="val xl" style="color:${proy>=0?'var(--green)':'var(--red)'}">${eur(proy)}</div><div style="font-size:.72rem;color:var(--mut2);margin-top:4px">${eur(cajaAmt)} + ${eur(porCobrar)} por cobrar − ${eur(porPagar)} por pagar · <b style="color:var(--orange)">sin descontar impuestos</b></div></div>
+    </div>
+    <div style="background:var(--inset);border:1.5px solid ${tuyo>=0?'var(--green)':'var(--red)'};border-radius:var(--radius);padding:16px 18px;margin-bottom:18px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:10px;margin-bottom:12px">
+        <span style="font-size:.9rem;font-weight:700">💰 Dinero tuyo de verdad</span>
+        <span style="font-size:2rem;font-weight:800;color:${tuyo>=0?'var(--green)':'var(--red)'}">${eur(tuyo)}</span>
+      </div>
+      <div style="font-size:.84rem;line-height:1.9;border-top:1px solid var(--line);padding-top:10px">
+        ${[['Dinero actual en cuenta',cajaAmt,0],['Por cobrar (te lo deben)',porCobrar,1],['Gastos fijos y variables pendientes',porPagar,-1],['Impuestos que aún debes',impDeuda,-1]].map(([l,v,s])=>`<div style="display:flex;justify-content:space-between;gap:10px"><span style="color:var(--mut)">${l}</span><span class="num" style="color:${s<0?'var(--red)':(s>0?'var(--green)':'var(--txt)')}">${s<0?'−':(s>0?'+':'')}${eur(Math.abs(v))}</span></div>`).join('')}
+        <div style="border-top:1px solid var(--line);margin-top:8px;padding-top:8px;display:flex;justify-content:space-between"><b>Tuyo de verdad</b><b class="num" style="color:${tuyo>=0?'var(--green)':'var(--red)'}">${eur(tuyo)}</b></div>
+      </div>
+      <div style="font-size:.74rem;color:var(--mut2);margin-top:10px;line-height:1.55">${tuyo<0?'⚠️ En negativo: cuando cobres todo y pagues impuestos no te quedará nada. Revisa cobros pendientes.':'Esto es lo que queda cuando cobres todo lo pendiente, pagues lo que debes y liquides con Hacienda. Lo demás está de paso por tu cuenta.'}</div>
     </div>
     <div style="margin-bottom:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
       <button class="btn sm" onclick="finAddFijo()">+ Gasto fijo mensual</button>
